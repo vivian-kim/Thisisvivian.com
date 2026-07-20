@@ -6,6 +6,8 @@ queries:
   - auto_renew/outcome_overall.sql
   - auto_renew/revenue_by_outcome.sql
   - auto_renew/outcome_by_product.sql
+  - auto_renew/outcome_by_hosting_subgroup.sql
+  - auto_renew/outcome_by_domain_tld.sql
   - auto_renew/outcome_by_plan_length.sql
   - auto_renew/outcome_by_price.sql
   - auto_renew/outcome_by_payment_gateway.sql
@@ -15,6 +17,9 @@ queries:
   - auto_renew/cancellation_duration_12mo_plans.sql
   - auto_renew/returning_customers_outcome.sql
   - auto_renew/seasonality_by_renewal_month.sql
+  - auto_renew/distinct_product_groups.sql
+  - auto_renew/distinct_product_slugs.sql
+  - auto_renew/outcome_timeseries.sql
 ---
 
 A subscription-based hosting/domain provider needed to understand **when users tend to enable or disable their auto-renew**. The goal was to understand behavioral patterns and provide actionable insights and suggestions to improve the auto-renew rate, for non-technical stakeholders on the product team.
@@ -174,7 +179,54 @@ Active cancellation and staying enabled are almost tied as the two largest outco
   <Column id=pct fmt=pct1 />
 </DataTable>
 
-**Hosting has both the best retention and the lowest no-record rate of any product.** Domain and mail both show high no-record shares — domains skew heavily toward the pre-March-2022 cohort, so that number is likely inflated by the tracking gap; mail's smaller sample makes it a lead, not a settled finding.
+**Hosting has both the best retention and the lowest no-record rate of any product.** Domain and mail both show high no-record shares. Verified the tracking-gap claim directly rather than leaving it as a hand-wave: for `domain:.es` specifically, no-record sits at **50.6%** for subscriptions purchased before March 2022, vs. **9.2%** after — an 82% relative drop, confirming the gap is real and large, not a rounding artifact. Mail's smaller sample still makes it a lead rather than a settled finding.
+
+### Hosting Isn't One Product: Shared vs. Cloud
+
+`product_group` treats all of hosting as one bucket. It isn't — shared and cloud hosting are different products with very different retention:
+
+<Heatmap
+    data={auto_renew_outcome_by_hosting_subgroup}
+    x=product_sub_group
+    y=outcome
+    value=pct
+    valueFmt=pct1
+/>
+
+<DataTable data={auto_renew_outcome_by_hosting_subgroup}>
+  <Column id=product_sub_group title="Sub-group" />
+  <Column id=outcome />
+  <Column id=subscriptions />
+  <Column id=pct fmt=pct1 />
+</DataTable>
+
+**Cloud hosting retains nearly 19 points better than shared (64.2% vs. 45.4%)**, with 282 subscriptions vs. shared's 14,162. Honest caveat: this substantially overlaps with the price→retention relationship already covered — cloud averages €18.30 vs. shared's €6.35. Still worth naming directly, though: "push more customers toward cloud hosting" is a concrete, actionable lever in a way "higher price bracket" alone isn't.
+
+**Plausible reasons beyond price, though none of these can be fully verified from this data:**
+- **Customer type likely differs.** Cloud hosting is typically bought by developers, agencies, or businesses running something with an actual operational dependency — not someone testing a hobby project. That's a stickier customer by nature, independent of price.
+- **Switching costs are probably higher.** Migrating a cloud setup (DNS, deployments, configs) takes more effort than abandoning shared hosting, so even a dissatisfied customer has more friction to actually leave.
+- **The price confound can't be cleanly separated from these** with the columns available here — there's no field indicating business vs. personal use, which would be the real test of "cloud loyalty" vs. "price loyalty."
+
+### Domain TLDs Vary Enormously Too
+
+Same issue, one level down — "Domain" (29.1% stayed) hides a wide range across TLDs:
+
+<DataTable data={auto_renew_outcome_by_domain_tld}>
+  <Column id=product_slug title="TLD" />
+  <Column id=subscriptions />
+  <Column id=stayed_pct fmt=pct1 title="Stayed" />
+  <Column id=cancelled_pct fmt=pct1 title="Cancelled" />
+  <Column id=no_record_pct fmt=pct1 title="No record" />
+  <Column id=avg_price fmt='€#,##0.00' title="Avg. price" />
+</DataTable>
+
+**`.shop` actively cancels at 55.9%** — worse than any other segment in this entire report, including the 12-month/annual-plan headline finding. Largely tracks price again (`.xyz` is free, `.online`/`.store`/`.tech` sit near €0.27-0.30, `.es`/`.org` are priced higher and retain better) — mostly the price story wearing a TLD costume. Still worth surfacing by name: TLD is something a pricing or promo team can act on directly. (`domain:.be` at 66.7% stayed is directional only — n=24, too small to trust on its own.)
+
+**Dug deeper into `.shop` specifically, since it's the single worst-performing segment in the report.** Two things line up:
+- **Seasonal concentration:** 218 of 410 `.shop` signups (53.2%) landed in Aug-Nov 2022, peaking in November at 67 — the same Black Friday window already flagged as a weak cohort elsewhere in this report. `.shop` being an e-commerce-branded TLD makes it a natural fit for holiday promotional campaigns.
+- **A real promo-to-full-price cliff:** 395 of 410 `.shop` subscriptions (96.3%) cluster at €0-0.76, with a small separate group of 15 (3.7%) jumping to €5.55-7.99 — roughly a 10-20x price increase at renewal. Compare `.es` (a better-retaining TLD), whose pricing sits in a tight, modest €1.68-1.92 band with no such cliff.
+
+**The likely mechanism: `.shop` domains were disproportionately sold as steep first-year promotional deals, probably timed to Black Friday, and the auto-renew charge represents a dramatically larger jump than other TLDs see** — a sharper, TLD-specific version of the "sticker shock" pattern this report already documents for annual plans generally. The `.shop` pattern is consistent with promotional first-year pricing followed by a steep renewal jump, based on price distribution and signup timing — but the dataset has no explicit promo flag to confirm this directly; it's an inference from price and timing, not a directly labeled variable.
 
 ## By Plan Length
 
@@ -320,6 +372,36 @@ For 12-month plans, the renewal date falls in the same calendar month as the ori
 </DataTable>
 
 **November is both the highest-volume renewal month (4,159) and one of the worst-retaining (30.6% stayed, 46.0% cancelled)** — plausibly tied to Black Friday driving price-sensitive signups. **January and February stand out for a different reason: no-record sits at 38.1% and 34.7%**, well above every other month (15-29% elsewhere) — worth checking against the tracking-gap timing before reading this as a real January/February effect, since these two months draw more heavily from the earlier, less-reliable cohort.
+
+---
+
+# Explore: Outcome Over Time
+
+An open-ended view for digging into any product or TLD directly — pick a product group, then optionally narrow to a specific slug (e.g. a single domain TLD), and watch how the three outcomes trend by signup month.
+
+<Dropdown data={auto_renew_distinct_product_groups} name=group_filter value=product_group>
+    <DropdownOption value="%" valueLabel="All product groups"/>
+</Dropdown>
+
+<Dropdown data={auto_renew_distinct_product_slugs} name=slug_filter value=product_slug>
+    <DropdownOption value="%" valueLabel="All slugs in this group"/>
+</Dropdown>
+
+<LineChart
+    data={auto_renew_outcome_timeseries}
+    x=month
+    y=subscriptions
+    series=outcome
+    chartAreaHeight=350
+/>
+
+<DataTable data={auto_renew_outcome_timeseries}>
+  <Column id=month />
+  <Column id=outcome />
+  <Column id=subscriptions />
+</DataTable>
+
+The slug dropdown updates to only show slugs belonging to the currently selected product group — switch to "domain" and it narrows to TLDs; switch to "hosting" and it narrows to shared/cloud slugs.
 
 ---
 
