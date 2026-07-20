@@ -8,19 +8,20 @@ Key questions included:
 
 - When do customers tend to enable or disable auto-renew?
 - Is the bigger problem activation (never turning it on) or retention (turning it off later)?
-- Which segments, product, plan length, price, payment method have the healthiest auto-renew rates?
+- Which segments — product, plan length, price, payment method — have the healthiest auto-renew rates?
 
 ## Executive Summary
 
-**Of the outcomes we can directly observe, active cancellation dominates.** Once a data-tracking gap in the early cohort is corrected for, half of all subscriptions actively cancel auto-renew before it would charge them again — a real, logged event, not an inference — and most of that cancellation clusters in the final 30 days before renewal. A separate 12.8% have no auto-renew activation on record at all; the data doesn't let us determine whether that means an instant cancel or something else, so it's tracked as its own distinct category throughout rather than folded into either "cancelled" or "will renew."
+**Of the outcomes we can directly observe, active cancellation is the largest single group** — 37.4% of all subscriptions have a logged auto-renew ON event followed by a logged OFF event before their term ended. A further 26.0% have no auto-renew activation on record at all; the data doesn't let us determine whether that means an instant cancel or something else, so it's tracked as its own distinct category throughout, not folded into "cancelled" or "will renew" (see Assumptions & Limitations for why, and for a known data-tracking issue that inflates this category for older subscriptions specifically).
 
-- Only **37.2%** of subscriptions are on track to actually auto-renew
-- **50.1%** actively cancel auto-renew before their term ends
-- **53.9%** of those cancellations happen within 30 days of the renewal date
-- **12-month plans cancel at 4.4x the rate of 1-month plans** (52.8% vs 12.1%), despite activating auto-renew just as reliably at purchase
-- The **highest-price tier (€10+) retains far better** than everything else (73.9% stay enabled vs 19-47% elsewhere)
-- **Crypto-paid subscriptions almost never auto-renew (94.9%)** — a technical/platform constraint, not customer behavior
-- A **data-tracking gap** for subscriptions purchased before March 2022 was found and excluded from all headline figures (see Assumptions & Limitations)
+- **36.6%** of subscriptions stayed enabled through to their renewal date
+- **37.4%** actively cancelled auto-renew before their term ended — a directly observed, logged event
+- **26.0%** have no auto-renew activation on record — kept separate, cause not confirmed
+- **54.3%** of active cancellations happen within 30 days of the renewal date — but this figure is dominated by 12-month plans; for those specifically it's 53.3%, while for 1-month plans it's 95.9% (nearly meaningless on its own, since the entire term is only 30 days — see the Timing section)
+- **12-month plans cancel at 2.75x the rate of 1-month plans** (39.1% vs 14.2%), despite starting with auto-renew on slightly *more* reliably
+- The **highest-price tier (€10+) retains far better** than everything else (63.3% stay enabled vs 26-49% elsewhere)
+- **Crypto-paid subscriptions almost never auto-renew (95.2% no record)** — a technical/platform constraint, not customer behavior
+- A **data-tracking gap** for subscriptions purchased before March 2022 was identified — it inflates the "no record" rate for that period specifically, but those subscriptions are still included in every figure below (see Assumptions & Limitations)
 
 ## Data Schema
 
@@ -45,9 +46,9 @@ Key questions included:
 
 ## Assumptions and Limitations
 
-**Tracking-gap cohort excluded from headline figures:** subscriptions purchased before March 2022 show a "never activated" rate as high as 68% in some months, vs. a stable ~13% from March 2022 onward. No behavioral explanation fits a 6x swing tied to purchase month — this is treated as a logging/rollout gap, not real customer behavior. All headline numbers use only the March 2022+ cohort (17,989 subscriptions, still >50% of the dataset). Full-dataset figures are available in the accompanying SQL file for reference.
+**Data-tracking gap, pre-March 2022 — included, not excluded, but flagged.** Subscriptions purchased before March 2022 show a "no record" rate as high as 68% in some months, vs. a stable ~11-16% from March 2022 onward. No behavioral explanation fits a swing that large tied purely to purchase month — this looks like a logging/rollout gap in the `ar_valid_from`/`ar_valid_to` tracking mechanism, not real customer behavior. Rather than dropping these subscriptions, **every figure in this report includes the full dataset (34,411 subscriptions)** — the older cohort is simply more likely to land in the "no record" bucket than it should. Anywhere the "no record" share looks elevated, purchase-date mix is a likely contributor worth checking before concluding it's a behavioral finding.
 
-**"No activation on record" treated as its own category, not merged into "cancelled":** for ~13% of subscriptions, there is no enable event logged at all (no `ar_valid_from`/`ar_valid_to`). Given the record-keeping is *usually* (not *always*) on-by-default, this could mean the customer opted out essentially instantly, or it could mean this segment genuinely never had auto-renew set — both are consistent with the data. A same-day toggle test confirmed the system *can* log instant on/off pairs (142 real examples), which weakens but doesn't rule out the "too fast to log" theory; an hourly-level toggle can't be tested since dates, not timestamps, are the only granularity available. Kept as a separate, clearly-labeled category rather than assumed either way.
+**"No activation on record" treated as its own category, not merged into "cancelled":** for 26.0% of subscriptions, there is no enable event logged at all (no `ar_valid_from`/`ar_valid_to`). Given the record-keeping is *usually* (not *always*) on-by-default, this could mean the customer opted out essentially instantly, or it could mean this segment genuinely never had auto-renew set — both are consistent with the data. A same-day toggle test confirmed the system *can* log instant on/off pairs (142 real examples), which weakens but doesn't rule out the "too fast to log" theory; an hourly-level toggle can't be tested since dates, not timestamps, are the only granularity available. Kept as a separate, clearly-labeled category rather than assumed either way.
 
 **No customer/account-level ID.** Only `subscription_id` is available — there's no way to link multiple subscriptions to the same customer. All rates in this analysis are subscription-level, not customer-level; a customer with several subscriptions is counted once per subscription, and cross-product customer behavior (e.g. "does this person keep hosting on but cancel their domain?") can't be observed.
 
@@ -57,13 +58,54 @@ Key questions included:
 
 ## Auto-Renew Outcomes by Segment
 
+Every table below groups by `final_status`, which is derived from the raw columns as shown here. This base query is what every "SQL query used" snippet in this section is built on top of:
+
+```sql
+CREATE OR REPLACE TABLE sub_status AS
+WITH true_rows AS (
+    -- one row per enabled window; keep only each subscription's most recent one
+    SELECT *,
+        row_number() OVER (PARTITION BY subscription_id ORDER BY ar_valid_from DESC) AS rn
+    FROM read_csv_auto('file.csv')
+    WHERE is_auto_renew = true
+),
+last_window AS (
+    SELECT * FROM true_rows WHERE rn = 1
+)
+SELECT
+    subscription_id, product_group, period_months, payment_gateway,
+    billings_eur_excl_vat, started_at, ended_at,
+    ar_valid_from, ar_valid_to,
+    CASE
+        -- no ON event was ever logged for this subscription
+        WHEN ar_valid_to IS NULL THEN 'never_enabled'
+        -- the ON window's end date reaches (or passes) the subscription's own end date
+        -- = auto-renew was still active when the term expired
+        WHEN ar_valid_to >= ended_at THEN 'stayed_enabled'
+        -- the ON window ended BEFORE the subscription's own end date
+        -- = a real, logged cancel event that happened ahead of expiry
+        ELSE 'disabled_before_expiry'
+    END AS final_status
+FROM last_window
+UNION ALL
+-- subscriptions with no is_auto_renew = true row at all: no ON event, no OFF event, nothing logged
+SELECT
+    subscription_id, product_group, period_months, payment_gateway,
+    billings_eur_excl_vat, started_at, ended_at,
+    NULL, NULL, 'never_enabled'
+FROM read_csv_auto('file.csv')
+WHERE is_auto_renew IS NULL;
+```
+
+The three outcome labels used throughout this report map to `final_status` as: **"No activation on record"** = `never_enabled`, **"Actively cancelled before expiry"** = `disabled_before_expiry`, **"Stayed enabled"** = `stayed_enabled`.
+
 ### Overall
 
 | Outcome | Subscriptions | % |
 |---|---|---|
-| Will auto-renew | 6,683 | 37.2% |
-| Actively cancelled before expiry | 9,005 | 50.1% |
-| No activation on record | 2,301 | 12.8% |
+| Actively cancelled before expiry | 12,879 | 37.4% |
+| Stayed enabled (will renew) | 12,587 | 36.6% |
+| No activation on record | 8,945 | 26.0% |
 
 <details>
 <summary>SQL query used for the overall status split</summary>
@@ -71,20 +113,20 @@ Key questions included:
 ```sql
 SELECT final_status, count(*) AS n,
        round(100.0 * count(*) / sum(count(*)) OVER (), 1) AS pct
-FROM sub_status_clean
+FROM sub_status
 GROUP BY 1 ORDER BY n DESC;
 ```
 </details>
 
-**Interpretation:** the majority outcome across the whole dataset is active cancellation, not passive non-adoption — 4 out of every 5 "won't renew" subscriptions had auto-renew turned on at some point before the customer chose to disable it.
+**Interpretation:** active cancellation and staying enabled are almost tied as the two largest outcomes, with "no record" a close third. Note the no-record share here (26.0%) is higher than it would be with only reliable-tracking data — see the Assumptions note on the pre-March-2022 gap.
 
 ### By Product Group
 
-| Product | Subscriptions | Will renew | Cancelled | No record |
+| Product | Subscriptions | Stayed enabled | Cancelled | No record |
 |---|---|---|---|---|
-| Domain | 9,105 | 33.6% | 51.9% | 14.5% |
-| Hosting | 8,111 | 39.4% | 51.2% | 9.4% |
-| Mail | 773 | 55.6% | 16.8% | 27.6% |
+| Domain | 19,001 | 29.1% | 33.4% | 37.5% |
+| Hosting | 14,444 | 45.8% | 44.3% | 9.9% |
+| Mail | 966 | 45.9% | 13.8% | 40.4% |
 
 <details>
 <summary>SQL query used for the product group breakdown</summary>
@@ -92,19 +134,19 @@ GROUP BY 1 ORDER BY n DESC;
 ```sql
 SELECT product_group, final_status, count(*) AS n,
        round(100.0 * count(*) / sum(count(*)) OVER (PARTITION BY product_group), 1) AS pct
-FROM sub_status_clean
+FROM sub_status
 GROUP BY 1, 2 ORDER BY 1, n DESC;
 ```
 </details>
 
-**Domain and hosting cancel at almost identical rates (~51-52%)** — the active-cancellation problem is universal across the two largest product lines, not specific to one. **Mail stands out with the highest "no record" rate (27.6%, ~1 in 4)** — a large enough gap from the ~9-15% baseline elsewhere to be worth checking the mail signup flow specifically, though its smaller sample size (773) means this reads as a lead, not a settled finding.
+**Hosting has both the best retention and the lowest no-record rate of any product** — 45.8% stay enabled, only 9.9% have no record. **Domain and mail both show high no-record shares (37.5% and 40.4%)** — domains skew heavily toward the pre-March-2022 cohort (many are cheap, early, high-volume purchases), so its no-record number is likely inflated by the tracking gap; mail's smaller sample (966) makes it harder to say the same with confidence, so it's flagged as a lead rather than a settled finding.
 
 ### By Plan Length
 
-| Plan | Subscriptions | Will renew | Cancelled | No record |
+| Plan | Subscriptions | Stayed enabled | Cancelled | No record |
 |---|---|---|---|---|
-| 1-month | 1,204 | 61.6% | 12.1% | 26.2% |
-| 12-month | 16,785 | 35.4% | 52.8% | 11.8% |
+| 1-month | 2,253 | 57.8% | 14.2% | 28.1% |
+| 12-month | 32,158 | 35.1% | 39.1% | 25.9% |
 
 <details>
 <summary>SQL query used for the plan length breakdown</summary>
@@ -112,22 +154,22 @@ GROUP BY 1, 2 ORDER BY 1, n DESC;
 ```sql
 SELECT period_months, final_status, count(*) AS n,
        round(100.0 * count(*) / sum(count(*)) OVER (PARTITION BY period_months), 1) AS pct
-FROM sub_status_clean
+FROM sub_status
 GROUP BY 1, 2 ORDER BY 1, n DESC;
 ```
 </details>
 
-**Annual plans activate auto-renew just as reliably as monthly plans** (11.8% no-record vs 26.2% — actually *better*) **but get cancelled at 4.4x the rate afterward.** Since 93.5% of the full dataset is 12-month plans, this single pattern describes what happens to almost the entire customer base. The large upfront lump-sum renewal charge is the most likely trigger.
+**Annual plans activate auto-renew about as reliably as monthly plans (25.9% vs 28.1% no-record — actually slightly better) but get cancelled at 2.75x the rate afterward.** Since 93.5% of the full dataset is 12-month plans, this single pattern describes what happens to the overwhelming majority of the customer base. The large upfront lump-sum renewal charge is the most likely trigger — see the Timing section below for how sharply this concentrates near the renewal date.
 
 ### By Price Range
 
-| Price | Subscriptions | Will renew | Cancelled | No record |
+| Price | Subscriptions | Stayed enabled | Cancelled | No record |
 |---|---|---|---|---|
-| Free (€0) | 3,187 | 42.4% | 46.4% | 11.2% |
-| €0.01 – 2 | 5,782 | 31.1% | 52.9% | 16.0% |
-| €2 – 5 | 1,593 | 47.3% | 27.1% | 25.6% |
-| €5 – 10 | 6,918 | 34.8% | 57.0% | 8.3% |
-| €10+ | 509 | **73.9%** | 19.1% | 7.1% |
+| Free (€0) | 5,854 | 33.0% | 30.0% | 37.0% |
+| €0.01 – 2 | 12,599 | 28.0% | 34.4% | 37.6% |
+| €2 – 5 | 4,717 | 48.5% | 28.3% | 23.1% |
+| €5 – 10 | 9,675 | 39.7% | 52.1% | 8.2% |
+| €10+ | 1,566 | **63.3%** | 26.4% | 10.3% |
 
 <details>
 <summary>SQL query used for the price range breakdown</summary>
@@ -143,19 +185,19 @@ SELECT
   END AS price_bucket,
   final_status, count(*) AS n,
   round(100.0 * count(*) / sum(count(*)) OVER (PARTITION BY price_bucket), 1) AS pct
-FROM sub_status_clean
+FROM sub_status
 GROUP BY 1, 2 ORDER BY 1, 2;
 ```
 </details>
 
-**The €10+ tier retains dramatically better than every other bracket** — nearly double the next-best segment. Cheap, near-free items (€0.01-2, the highest-volume bucket at 5,782 subscriptions) cancel the most. Higher price appears to correlate with a more invested, committed customer.
+**The €10+ tier retains dramatically better than every other bracket.** The cheapest brackets (free and €0.01-2, which together are over half the dataset) show the highest no-record rates too — consistent with these buckets being dominated by cheap domains, which also skew toward the pre-March-2022 cohort. A separate correlation check (price as a continuous value vs. "stayed enabled") found a real but weak relationship (+0.098) — price is a contributing factor, not a primary driver.
 
 ### By Payment Gateway Type
 
-| Gateway type | Subscriptions | Will renew | Cancelled | No record |
+| Gateway type | Subscriptions | Stayed enabled | Cancelled | No record |
 |---|---|---|---|---|
-| Card / bank | 14,180 | 37.6% | 53.0% | 9.4% |
-| Crypto | 628 | 2.1% | 3.0% | **94.9%** |
+| Card / bank | 28,207 | 38.8% | 39.9% | 21.3% |
+| Crypto | 1,074 | 2.0% | 2.9% | **95.2%** |
 
 <details>
 <summary>SQL query used for the payment gateway breakdown</summary>
@@ -170,107 +212,114 @@ SELECT
     CASE WHEN payment_gateway IN ('coingate','coinpayments') THEN 'crypto'
          WHEN payment_gateway IN ('checkout','credorax','paypal') THEN 'card_or_bank'
          ELSE 'other' END), 1) AS pct
-FROM sub_status_clean
+FROM sub_status
 GROUP BY 1, 2 ORDER BY 1, n DESC;
 ```
 </details>
 
-**Crypto is very likely a technical constraint, not a behavioral signal** — crypto payments generally can't be stored for automatic re-billing the way a card can. Recommend excluding crypto from auto-renew health metrics going forward, and reporting it as a separate "renewability by payment method" line instead.
+**Crypto is very likely a technical constraint, not a behavioral signal** — crypto payments generally can't be stored for automatic re-billing the way a card can. This pattern is stable regardless of the tracking-gap issue (crypto gateways are a small, distinct population). Recommend excluding crypto from auto-renew health metrics going forward, and reporting it as a separate "renewability by payment method" line instead.
 
-## Timing of Cancellation
+## Timing and Duration of Cancellation
 
-Among subscriptions that actively cancelled before their term ended, timing relative to the renewal date:
+Two related questions, both only about the "actively cancelled" group (12,879 subscriptions) — this group is unaffected by the no-record ambiguity, since every one of these has a directly observed ON event and OFF event. **Both are split by plan length**, since "30 days before renewal" or "days kept on" mean very different things for a 30-day term vs. a 365-day term — a blended figure across both plan lengths would be misleading (a 1-month plan is nearly guaranteed to fall "within 30 days of renewal" simply because the whole term is that short).
 
-| Timing | Cancellations | % |
+### How close to the renewal date did the cancellation happen?
+
+**1-month plans** (n=319)
+
+| Timing | Count | % |
 |---|---|---|
-| 0-3 days before renewal | 1,426 | 15.8% |
-| 4-14 days before | 1,206 | 13.4% |
-| 15-30 days before | 2,223 | 24.7% |
-| 31-90 days before | 1,607 | 17.8% |
-| 90+ days before | 2,543 | 28.2% |
-| **≤30 days combined** | **4,855** | **53.9%** |
+| 0-3 days before renewal | 29 | 9.1% |
+| 4-7 days before | 15 | 4.7% |
+| 8-14 days before | 125 | 39.2% |
+| 15-30 days before | 150 | 47.0% |
+
+95.9% fall "within 30 days of renewal" — but since the entire term is only 30 days, this number is close to meaningless as a "last-minute" signal. It just describes when in a short window the cancel happened, not proximity to a looming charge.
+
+**12-month plans** (n=12,560)
+
+| Timing | Count | % |
+|---|---|---|
+| 0-3 days before renewal | 1,470 | 11.7% |
+| 4-14 days before | 1,930 | 15.4% |
+| 15-30 days before | 3,289 | 26.2% |
+| 31-90 days before | 2,007 | 16.0% |
+| 90+ days before | 3,864 | 30.8% |
+| **≤30 days combined** | **6,689** | **53.3%** |
+
+This is the real signal: over half of all annual-plan cancellations happen in the final 30 days before renewal — a plausible reaction to renewal-reminder emails or notifications.
+
+### How long did the customer keep auto-renew on before cancelling?
+
+**1-month plans** (max possible: 30 days, n=316)
+
+| Duration kept on | Count | % |
+|---|---|---|
+| 0-3 days | 44 | 13.9% |
+| 4-7 days | 24 | 7.6% |
+| 8-14 days | 73 | 23.1% |
+| 15-21 days | 125 | 39.6% |
+| 22-30 days | 50 | 15.8% |
+
+Mean: 14.3 days · Median: 16.0 days — roughly the halfway point of the term, fairly spread out.
+
+**12-month plans** (max possible: 364 days, n=12,560)
+
+| Duration kept on | Count | % |
+|---|---|---|
+| 0-7 days | 652 | 5.2% |
+| 8-30 days | 609 | 4.8% |
+| 31-90 days | 685 | 5.5% |
+| 91-180 days | 831 | 6.6% |
+| 181-270 days | 1,011 | 8.0% |
+| **271-365 days** | **8,772** | **69.8%** |
+
+Mean: 270.5 days · Median: 336.0 days — heavily back-loaded to the final quarter of the year.
 
 <details>
-<summary>SQL query used for the cancellation timing analysis</summary>
+<summary>SQL query used for the timing and duration analysis</summary>
 
 ```sql
-SELECT
+-- timing before renewal, split by plan length
+SELECT period_months,
   CASE
-    WHEN days_before_expiry_disabled <= 3  THEN '1_0-3'
-    WHEN days_before_expiry_disabled <= 14 THEN '2_4-14'
-    WHEN days_before_expiry_disabled <= 30 THEN '3_15-30'
-    WHEN days_before_expiry_disabled <= 90 THEN '4_31-90'
-    ELSE '5_90+'
+    WHEN days_before_expiry_disabled <= 3  THEN '0-3'
+    WHEN days_before_expiry_disabled <= 14 THEN '4-14'
+    WHEN days_before_expiry_disabled <= 30 THEN '15-30'
+    WHEN days_before_expiry_disabled <= 90 THEN '31-90'
+    ELSE '90+'
   END AS bucket, count(*) AS n,
-  round(100.0 * count(*) / sum(count(*)) OVER (), 1) AS pct
-FROM sub_status_clean
-WHERE final_status = 'disabled_before_expiry'
-GROUP BY 1 ORDER BY 1;
-```
-</details>
-
-**Over half of all cancellations happen in the final 30 days before renewal** — almost certainly a reaction to renewal-reminder emails or notifications, not a random-time decision. This is the single most concentrated, addressable moment in the entire customer journey.
-
-### Cancellation Duration, by Plan Length
-
-A related but distinct question: not "how close to renewal" but "how long did the customer keep auto-renew on before switching it off," measured from the start of the subscription. Split by plan length, since a 1-month plan and a 12-month plan have very different possible durations.
-
-**1-month plans** (max possible: 30 days, n=145)
-
-| Duration kept on | Count | % |
-|---|---|---|
-| 0-3 days | 17 | 11.7% |
-| 4-7 days | 10 | 6.9% |
-| 8-14 days | 32 | 22.1% |
-| 15-21 days | 54 | 37.2% |
-| 22-30 days | 32 | 22.1% |
-
-Mean: 15.5 days · Median: 17 days — roughly the halfway point of the term, fairly spread out.
-
-**12-month plans** (max possible: 364 days, n=8,859)
-
-| Duration kept on | Count | % |
-|---|---|---|
-| 0-7 days | 339 | 3.8% |
-| 8-30 days | 363 | 4.1% |
-| 31-90 days | 453 | 5.1% |
-| 91-180 days | 592 | 6.7% |
-| 181-270 days | 740 | 8.4% |
-| **271-365 days** | **6,372** | **71.9%** |
-
-Mean: 278 days · Median: 337 days — heavily back-loaded to the final quarter of the year.
-
-<details>
-<summary>SQL query used for the cancellation duration analysis</summary>
-
-```sql
-SELECT
-  period_months,
-  CASE
-    WHEN days_to_disable <= 7 THEN '0-7 days'
-    WHEN days_to_disable <= 30 THEN '8-30 days'
-    WHEN days_to_disable <= 90 THEN '31-90 days'
-    WHEN days_to_disable <= 180 THEN '91-180 days'
-    WHEN days_to_disable <= 270 THEN '181-270 days'
-    ELSE '271-365 days'
-  END AS cancellation_duration,
-  count(*) AS n,
   round(100.0 * count(*) / sum(count(*)) OVER (PARTITION BY period_months), 1) AS pct
-FROM sub_status_clean
+FROM sub_status
+WHERE final_status = 'disabled_before_expiry'
+GROUP BY 1, 2 ORDER BY 1, 2;
+
+-- duration kept on before cancelling, split by plan length
+SELECT period_months,
+  CASE
+    WHEN days_to_disable <= 7 THEN '0-7'
+    WHEN days_to_disable <= 30 THEN '8-30'
+    WHEN days_to_disable <= 90 THEN '31-90'
+    WHEN days_to_disable <= 180 THEN '91-180'
+    WHEN days_to_disable <= 270 THEN '181-270'
+    ELSE '271-365'
+  END AS bucket, count(*) AS n,
+  round(100.0 * count(*) / sum(count(*)) OVER (PARTITION BY period_months), 1) AS pct
+FROM sub_status
 WHERE final_status = 'disabled_before_expiry' AND days_to_disable >= 0
 GROUP BY 1, 2 ORDER BY 1, 2;
 ```
 </details>
 
-**The two plan types tell genuinely different stories once separated.** Monthly cancellations are fairly spread out across the term — no sharp late spike. Annual cancellations are massively concentrated in the final 3 months (71.9% of them), right before the renewal charge. This strengthens the "annual sticker shock" theory: it isn't a general late-term pattern, it's specific to the size of the annual charge — the monthly plan, with its own much smaller renewal amount, doesn't show the same last-minute concentration.
+**The two plan types tell genuinely different stories once separated properly.** Monthly cancellations are fairly spread out across the term. Annual cancellations are massively concentrated in the final 3 months (69.8% of them by duration-kept-on, 53.3% by proximity-to-renewal) — both views agree the trigger is specifically the size and timing of the annual renewal charge, not a general late-term pattern.
 
-*(Note: one subscription with an impossible negative duration — its logged auto-renew window predates the subscription's own start date — was excluded from this analysis as a data error, consistent with the other isolated data-quality issues below.)*
+*(Note: one subscription with an impossible negative duration — its logged auto-renew window predates the subscription's own start date — was excluded from the duration analysis as a data error, consistent with the other isolated data-quality issues below.)*
 
 ## Data Quality Findings
 
-Three distinct issues surfaced during analysis, kept separate from the behavioral findings above since none of them changed the core conclusions but all are worth reporting to the data/engineering team.
+Four distinct issues surfaced during analysis, kept separate from the behavioral findings above since none of them changed the core conclusions but all are worth reporting to the data/engineering team.
 
-**Tracking gap, pre-March 2022.** See Assumptions & Limitations above — a likely rollout gap in the `ar_valid_from`/`ar_valid_to` logging mechanism, not a product or customer issue.
+**Tracking gap, pre-March 2022.** See Assumptions & Limitations above — a likely rollout gap in the `ar_valid_from`/`ar_valid_to` logging mechanism, not a product or customer issue. Included in all figures, not excluded, but inflates "no record" for that period.
 
 **18 broken records, isolated to `.es` domains.** These rows have `ar_valid_from` *after* `ar_valid_to` — a logically impossible order. All 18 are `domain:.es`, 61% are free/promotional domains, and several share identical `ar_valid_from` dates across unrelated subscriptions (e.g. four different subscriptions all show `2023-03-15`). This pattern points to a batch job writing an incorrect run-date into old, already-closed subscription records rather than any real customer action — recommended as a direct bug report.
 
@@ -280,11 +329,11 @@ Three distinct issues surfaced during analysis, kept separate from the behaviora
 
 ## Conclusions and Recommendations
 
-**Build a save flow for the 15-30 day pre-renewal window.** This is the single biggest, most universal lever available: half of all subscriptions actively cancel, over half of those cancellations happen in the final 30 days, and the pattern holds consistently across domain and hosting alike. A targeted intervention here — a "keep your price locked in" nudge, a small loyalty discount, or clearer messaging about what happens at expiry — reaches the widest population of any single fix.
+**Build a save flow for the 15-30 day pre-renewal window, targeted at 12-month plans specifically.** This is the single biggest, most universal lever available: 39.1% of annual subscriptions actively cancel, over half of those cancellations happen in the final 30 days, and the pattern holds consistently across domain and hosting alike. A targeted intervention here — a "keep your price locked in" nudge, a small loyalty discount, or clearer messaging about what happens at expiry — reaches the widest population of any single fix. (Note: don't apply this same "30 days" framing to monthly plans — it doesn't mean the same thing there.)
 
-**Soften the annual renewal "sticker shock."** Annual plans get cancelled at 4.4x the rate of monthly plans despite activating just as reliably at purchase — the large upfront charge is the likely trigger. Consider an early reminder with the exact amount and date, or an installment option for the annual renewal.
+**Soften the annual renewal "sticker shock."** Annual plans get cancelled at 2.75x the rate of monthly plans despite activating just as reliably at purchase — the large upfront charge is the likely trigger. Consider an early reminder with the exact amount and date, or an installment option for the annual renewal.
 
-**Investigate mail's low activation rate with more data.** Mail has the highest "no activation on record" rate (27.6%) of the three products — worth a direct check of the mail signup flow's auto-renew default, though the smaller sample size means this should be verified before acting on it.
+**Investigate the domain and mail no-record rates, but confirm the tracking-gap contribution first.** Both products show elevated "no record" shares (37.5% and 40.4%). Before treating this as a product/flow issue, check how much of each is explained by purchase-date mix (domains and mail skew toward the less-reliable pre-March-2022 cohort) — hosting, which skews more recent, has a much lower no-record rate (9.9%) and may simply be a cleaner-tracked product rather than a behaviorally different one.
 
 **Exclude crypto payments from auto-renew health metrics.** Crypto-paid subscriptions are very likely technically incapable of auto-renewing rather than behaviorally opting out — blending them into the main metric understates the real renewability of payment methods that can actually renew.
 
