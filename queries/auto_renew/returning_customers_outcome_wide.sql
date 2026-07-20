@@ -1,6 +1,6 @@
 -- Same data as returning_customers_outcome.sql, one row per group.
 SELECT
-  CASE WHEN n_windows > 1 THEN 'Toggled more than once' ELSE 'Never toggled back' END AS grp,
+  CASE WHEN n_windows > 1 THEN 'Re-enabled after disabling' ELSE 'Never re-enabled' END AS grp,
   count(*) AS n,
   round(100.0 * sum(CASE WHEN final_status = 'stayed_enabled' THEN 1 ELSE 0 END) / count(*), 1) / 100.0 AS stayed_pct,
   round(100.0 * sum(CASE WHEN final_status = 'disabled_before_expiry' THEN 1 ELSE 0 END) / count(*), 1) / 100.0 AS cancelled_pct

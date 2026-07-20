@@ -29,6 +29,7 @@ queries:
   - auto_renew/distinct_product_groups.sql
   - auto_renew/distinct_product_slugs.sql
   - auto_renew/outcome_timeseries.sql
+  - auto_renew/outcome_timeseries_wide.sql
 ---
 
 A subscription-based hosting/domain provider needed to understand **when users tend to enable or disable their auto-renew**. The goal was to understand behavioral patterns and provide actionable insights and suggestions to improve the auto-renew rate, for non-technical stakeholders on the product team.
@@ -44,7 +45,6 @@ Key questions included:
 
 ## Jump to
 - [Executive Summary](#executive-summary)
-- [Conclusions and Recommendations](#conclusions-and-recommendations)
 - [Data Schema](#data-schema)
 - [Assumptions and Limitations](#assumptions-and-limitations)
 - [Auto-Renew Outcomes by Segment](#auto-renew-outcomes-by-segment)
@@ -53,6 +53,7 @@ Key questions included:
 - [Seasonality](#seasonality)
 - [Explore: Outcome Over Time](#explore-outcome-over-time)
 - [Appendix: Data Quality Findings](#appendix-data-quality-findings)
+- [Conclusions and Recommendations](#conclusions-and-recommendations)
 
 ---
 
@@ -81,24 +82,16 @@ Key questions included:
 
 ---
 
-# Conclusions and Recommendations
-
-1. **Build a save flow for the 15-30 day pre-renewal window, targeted at 12-month `hosting:hostinger_premium` customers specifically.** This is the single biggest lever by both count and revenue: 39.1% of annual subscriptions actively cancel, over half within the final 30 days, and `hosting:hostinger_premium` alone accounts for 85.2% of all cancelled revenue (€38,998) — far more than its cancel rate alone would suggest. €28,054 in current-term revenue sits in the 30-day window across all products — recovering even 10% is a rough ~€2,805/year, recurring.
-2. **Soften the annual renewal "sticker shock."** Annual plans cancel at 2.79x the rate of monthly despite activating just as reliably — the large upfront charge is the likely trigger. Consider an early reminder with the exact amount, or an installment option.
-3. **Investigate domain and mail no-record rates, but confirm the tracking-gap contribution first.** Both skew toward the less-reliable pre-March-2022 cohort — hosting, which skews more recent, has a much lower no-record rate and may just be more cleanly tracked.
-4. **Get confirmation on whether crypto's near-100% no-record rate is a technical limitation or something else.** We don't know the cause — no field in this data explains it. One assumption worth testing is a platform constraint (crypto generally can't be stored for automatic re-billing), but that's a guess, not a finding. Worth a direct question to whoever owns the payment integration before treating it as settled and excluding crypto from auto-renew health metrics on that basis.
-5. **Give the November cohort a dedicated retention plan, but confirm the Black Friday explanation first.** November is the largest signup month and one of the worst-retaining — €6,076 tied to its cancelled subscriptions. This report has no actual promotional/campaign data — the Black Friday link is an assumption based on timing alone (November volume spike + calendar proximity), not a confirmed cause. Worth confirming with whoever ran marketing that year, and confirming the pattern repeats in future years, before treating it as permanent.
-6. **Resolve the "no record" ambiguity with the data owner.** The single biggest open question in this whole analysis: does a blank `is_auto_renew` mean the customer declined instantly, or that auto-renew was never applicable to that record? Two specific, answerable questions would settle it — see Assumptions & Limitations. Until answered, the 26.0% "no record" segment should stay reported separately, not folded into "cancelled" or "will renew."
-7. **Fix the underlying tracking gap and the two isolated data-quality bugs** (`.es` domain batch job, `hosting_premium` window-predates-start) before any future auto-renew reporting relies on this pipeline again.
-
----
-
 # Data Schema
+
+<Details title="Subscriptions table — column reference (click to expand)">
 
 ## Subscriptions table
 <table class="markdown text-left"><thead class="markdown"><tr class="markdown"><th class="markdown"><strong class="markdown">Column</strong></th> <th class="markdown"><strong class="markdown">Data Type</strong></th> <th class="markdown"><strong class="markdown">Description</strong></th></tr></thead> <tbody class="markdown"><tr class="markdown"><td class="markdown">subscription_id</td> <td class="markdown">INTEGER</td> <td class="markdown">ID of the subscription</td></tr> <tr class="markdown"><td class="markdown">payment_gateway</td> <td class="markdown">STRING</td> <td class="markdown">Payment gateway used (Checkout / Credorax / PayPal / crypto / etc.)</td></tr> <tr class="markdown"><td class="markdown">product_group</td> <td class="markdown">STRING</td> <td class="markdown">Broadest product category (domain / hosting / mail)</td></tr> <tr class="markdown"><td class="markdown">product_sub_group</td> <td class="markdown">STRING</td> <td class="markdown">Subset of product group</td></tr> <tr class="markdown"><td class="markdown">product_slug</td> <td class="markdown">STRING</td> <td class="markdown">Detailed product name</td></tr> <tr class="markdown"><td class="markdown">period_months</td> <td class="markdown">INTEGER</td> <td class="markdown">Plan duration in months</td></tr> <tr class="markdown"><td class="markdown">started_at</td> <td class="markdown">DATE</td> <td class="markdown">Subscription start date</td></tr> <tr class="markdown"><td class="markdown">ended_at</td> <td class="markdown">DATE</td> <td class="markdown">Subscription end date</td></tr> <tr class="markdown"><td class="markdown">is_auto_renew</td> <td class="markdown">BOOLEAN</td> <td class="markdown">TRUE if auto-renew is on</td></tr> <tr class="markdown"><td class="markdown">ar_valid_from</td> <td class="markdown">DATE</td> <td class="markdown">Date auto-renew was enabled</td></tr> <tr class="markdown"><td class="markdown">ar_valid_to</td> <td class="markdown">DATE</td> <td class="markdown">Date auto-renew was disabled</td></tr> <tr class="markdown"><td class="markdown">billings_eur_excl_vat</td> <td class="markdown">DECIMAL</td> <td class="markdown">Billed amount in EUR, excl. VAT</td></tr></tbody></table>
 
 **Important structural note:** this table is a *status-change log*, not one row per subscription. A subscription only gets more than one row if the customer toggled auto-renew off and back on more than once during the term (365 of 34,411 subscriptions do this — see Returning Customers below).
+
+</Details>
 
 ---
 
@@ -809,9 +802,6 @@ ORDER BY 1
 
 ---
 
-
----
-
 # Explore: Outcome Over Time
 
 An open-ended view for digging into any product or TLD directly — pick a product group, then optionally narrow to a specific slug (e.g. a single domain TLD), and watch how the three outcomes trend by signup month. **Different lens from Seasonality above:** Seasonality collapses every year into one Jan-Dec pattern to isolate a *repeating* calendar effect; this view is the raw chronological timeline (actual year-month) for a specific product, with no year-collapsing.
@@ -834,10 +824,24 @@ An open-ended view for digging into any product or TLD directly — pick a produ
     chartAreaHeight=350
 />
 
-<DataTable data={auto_renew_outcome_timeseries}>
+**Cancellation rate trend (line), against total volume (bars) — the exact per-outcome % for every month is in the table below:**
+
+<BarChart
+    data={auto_renew_outcome_timeseries_wide}
+    x=month
+    y=subscriptions
+    y2SeriesType=line
+    y2=cancelled_pct
+    y2Fmt=pct1
+    chartAreaHeight=300
+/>
+
+<DataTable data={auto_renew_outcome_timeseries_wide}>
   <Column id=month />
-  <Column id=outcome />
   <Column id=subscriptions />
+  <Column id=stayed_pct fmt=pct1 title="Stayed enabled" />
+  <Column id=cancelled_pct fmt=pct1 title="Cancelled" />
+  <Column id=no_record_pct fmt=pct1 title="No record" />
 </DataTable>
 
 <Details title="SQL query used for Outcome Over Time">
@@ -916,3 +920,13 @@ ORDER BY exclusion_reason, subscription_id
 **Impact on the rest of this report: negligible** — every headline percentage is unchanged at 1 decimal place (37.4% / 36.6% / 26.0%), since this is 20 out of 34,411 subscriptions (0.058%). This is a correctness fix, not a story change: both bugs are recommended as direct bug reports, and these 20 should be re-classified once the data team confirms what actually happened to them.
 
 ---
+
+# Conclusions and Recommendations
+
+1. **Build a save flow for the 15-30 day pre-renewal window, targeted at 12-month `hosting:hostinger_premium` customers specifically.** This is the single biggest lever by both count and revenue: 39.1% of annual subscriptions actively cancel, over half within the final 30 days, and `hosting:hostinger_premium` alone accounts for 85.2% of all cancelled revenue (€38,998) — far more than its cancel rate alone would suggest. €28,054 in current-term revenue sits in the 30-day window across all products — recovering even 10% is a rough ~€2,805/year, recurring.
+2. **Soften the annual renewal "sticker shock."** Annual plans cancel at 2.79x the rate of monthly despite activating just as reliably — the large upfront charge is the likely trigger. Consider an early reminder with the exact amount, or an installment option.
+3. **Investigate domain and mail no-record rates, but confirm the tracking-gap contribution first.** Both skew toward the less-reliable pre-March-2022 cohort — hosting, which skews more recent, has a much lower no-record rate and may just be more cleanly tracked.
+4. **Get confirmation on whether crypto's near-100% no-record rate is a technical limitation or something else.** We don't know the cause — no field in this data explains it. One assumption worth testing is a platform constraint (crypto generally can't be stored for automatic re-billing), but that's a guess, not a finding. Worth a direct question to whoever owns the payment integration before treating it as settled and excluding crypto from auto-renew health metrics on that basis.
+5. **Give the November cohort a dedicated retention plan, but confirm the Black Friday explanation first.** November is the largest signup month and one of the worst-retaining — €6,076 tied to its cancelled subscriptions. This report has no actual promotional/campaign data — the Black Friday link is an assumption based on timing alone (November volume spike + calendar proximity), not a confirmed cause. Worth confirming with whoever ran marketing that year, and confirming the pattern repeats in future years, before treating it as permanent.
+6. **Resolve the "no record" ambiguity with the data owner.** The single biggest open question in this whole analysis: does a blank `is_auto_renew` mean the customer declined instantly, or that auto-renew was never applicable to that record? Two specific, answerable questions would settle it — see Assumptions & Limitations. Until answered, the 26.0% "no record" segment should stay reported separately, not folded into "cancelled" or "will renew."
+7. **Fix the underlying tracking gap and the two isolated data-quality bugs** (`.es` domain batch job, `hosting_premium` window-predates-start) before any future auto-renew reporting relies on this pipeline again.
