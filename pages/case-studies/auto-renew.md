@@ -5,19 +5,26 @@ queries:
   - subscription_status.sql
   - auto_renew/outcome_overall.sql
   - auto_renew/revenue_by_outcome.sql
+  - auto_renew/revenue_cancelled_vs_rest.sql
   - auto_renew/outcome_by_product.sql
+  - auto_renew/outcome_by_product_wide.sql
   - auto_renew/outcome_by_hosting_subgroup.sql
+  - auto_renew/outcome_by_hosting_subgroup_wide.sql
   - auto_renew/outcome_by_domain_tld.sql
   - auto_renew/excluded_unreliable_records.sql
   - auto_renew/cancelled_revenue_by_product.sql
   - auto_renew/outcome_by_plan_length.sql
+  - auto_renew/outcome_by_plan_length_wide.sql
   - auto_renew/outcome_by_price.sql
+  - auto_renew/outcome_by_price_wide.sql
   - auto_renew/outcome_by_payment_gateway.sql
+  - auto_renew/outcome_by_payment_gateway_wide.sql
   - auto_renew/cancellation_timing_1mo_plans.sql
   - auto_renew/cancellation_timing_12mo_plans.sql
   - auto_renew/cancellation_duration_1mo_plans.sql
   - auto_renew/cancellation_duration_12mo_plans.sql
   - auto_renew/returning_customers_outcome.sql
+  - auto_renew/returning_customers_outcome_wide.sql
   - auto_renew/seasonality_by_renewal_month.sql
   - auto_renew/distinct_product_groups.sql
   - auto_renew/distinct_product_slugs.sql
@@ -65,7 +72,7 @@ Key questions included:
 - November is both the highest-volume signup month and one of the worst-retaining — the Black Friday link is a plausible, timing-based inference, not confirmed by any promotional data
 
 ## Product & Domain Detail
-- **Cloud hosting retains 19 points better than shared hosting** (64.2% vs. 45.4%) — a concrete lever (push customers toward cloud), though it overlaps with the price story
+- **Cloud hosting retains 19 points better than shared hosting** (64.2% vs. 45.4%) — a concrete lever (push customers toward cloud). Checked against price using the median (not average, which is skewed by a few expensive outliers): cloud's typical price is not actually higher than shared's, so this isn't just the price story wearing a hosting-type costume
 - **`.shop` is the single worst-performing segment in the entire report** (55.9% cancel) — a steep first-year price followed by a 10-20x renewal jump, with signups concentrated near Black Friday; no promo data exists to confirm the cause
 - Domain, hosting, and mail all show meaningfully different "no record" rates (37.5% / 9.9% / 40.4%) — worth checking against the tracking gap before treating as a behavioral finding
 
@@ -220,18 +227,40 @@ ORDER BY subscriptions DESC
 
 Active cancellation and staying enabled are almost tied as the two largest outcomes, with "no record" a close third.
 
-## Revenue at Risk
+## Revenue Lost to Cancellation
 
 <BarChart
-    data={auto_renew_revenue_by_outcome}
-    x=outcome
+    data={auto_renew_revenue_cancelled_vs_rest}
+    x=bucket
     y=revenue_eur
     yFmt='€#,##0'
+    y2SeriesType=line
+    y2=pct_of_total
+    y2Fmt=pct1
     labels=true
     labelPosition=center
     labelFmt='€#,##0'
     chartAreaHeight=300
 />
+
+<Details title="SQL query used for Revenue Lost to Cancellation">
+
+```sql
+SELECT
+  CASE WHEN final_status = 'disabled_before_expiry' THEN '1. Lost to cancellation' ELSE '2. Everything else' END AS bucket,
+  round(sum(billings_eur_excl_vat), 2) AS revenue_eur,
+  round(100.0 * sum(billings_eur_excl_vat) / sum(sum(billings_eur_excl_vat)) OVER (), 1) / 100.0 AS pct_of_total
+FROM ${subscription_status}
+WHERE final_status != 'excluded_unreliable'
+GROUP BY 1
+ORDER BY bucket
+```
+
+</Details>
+
+**€45,779 — 40.6% of all revenue tracked — is tied to subscriptions that actively cancelled auto-renew.** Of that, €28,054 (6,689 subscriptions) sits in the highest-leverage window: 12-month plans cancelled within 30 days of renewal. A rough illustrative scenario: recovering 10% of those is ~€2,805/year in retained revenue, recurring for every customer kept — a sizing exercise, not a forecast.
+
+**Full breakdown, including the "everything else" split into its two parts:**
 
 <DataTable data={auto_renew_revenue_by_outcome}>
   <Column id=outcome />
@@ -239,7 +268,7 @@ Active cancellation and staying enabled are almost tied as the two largest outco
   <Column id=revenue_eur fmt='€#,##0' title="Revenue" />
 </DataTable>
 
-<Details title="SQL query used for Revenue at Risk">
+<Details title="SQL query used for the full 3-way revenue breakdown">
 
 ```sql
 SELECT
@@ -252,13 +281,12 @@ SELECT
   count(*) AS subscriptions,
   round(sum(billings_eur_excl_vat), 2) AS revenue_eur
 FROM ${subscription_status}
+WHERE final_status != 'excluded_unreliable'
 GROUP BY 1, 2
 ORDER BY revenue_eur DESC
 ```
 
 </Details>
-
-**€45,779 — 40.6% of all revenue tracked — is tied to subscriptions that actively cancelled auto-renew.** Of that, €28,054 (6,689 subscriptions) sits in the highest-leverage window: 12-month plans cancelled within 30 days of renewal. A rough illustrative scenario: recovering 10% of those is ~€2,805/year in retained revenue, recurring for every customer kept — a sizing exercise, not a forecast.
 
 ### Which Product Actually Loses the Most Money — Rate vs. Revenue
 
@@ -302,7 +330,7 @@ ORDER BY cancelled_revenue DESC
 
 <Details title="Segment Deep-Dive: Product, Plan, Price, Payment">
 
-Cancel *rate* by product, plan length, price, and payment method — supporting detail behind the Overall and Revenue at Risk charts above. Worth reading if you want to know *where* the cancellations concentrate, not just how many there are.
+Cancel *rate* by product, plan length, price, and payment method — supporting detail behind the Overall and Revenue Lost to Cancellation charts above. Worth reading if you want to know *where* the cancellations concentrate, not just how many there are.
 
 ## By Product Group
 
@@ -314,11 +342,13 @@ Cancel *rate* by product, plan length, price, and payment method — supporting 
     valueFmt=pct1
 />
 
-<DataTable data={auto_renew_outcome_by_product}>
-  <Column id=product_group />
-  <Column id=outcome />
+<DataTable data={auto_renew_outcome_by_product_wide}>
+  <Column id=product_group title="Product group" />
   <Column id=subscriptions />
-  <Column id=pct fmt=pct1 />
+  <Column id=stayed_pct fmt=pct1 title="Stayed enabled" />
+  <Column id=cancelled_pct fmt=pct1 title="Cancelled" />
+  <Column id=no_record_pct fmt=pct1 title="No record" />
+  <Column id=median_price fmt='€#,##0.00' title="Median price" />
 </DataTable>
 
 <Details title="SQL query used for By Product Group">
@@ -326,23 +356,22 @@ Cancel *rate* by product, plan length, price, and payment method — supporting 
 ```sql
 SELECT
   product_group,
-  CASE final_status
-    WHEN 'stayed_enabled' THEN 'Stayed enabled'
-    WHEN 'disabled_before_expiry' THEN 'Actively cancelled'
-    WHEN 'no_record' THEN 'No record'
-  END AS outcome,
-  final_status,
   count(*) AS subscriptions,
-  round(100.0 * count(*) / sum(count(*)) OVER (PARTITION BY product_group), 1) / 100.0 AS pct
+  round(100.0 * sum(CASE WHEN final_status = 'stayed_enabled' THEN 1 ELSE 0 END) / count(*), 1) / 100.0 AS stayed_pct,
+  round(100.0 * sum(CASE WHEN final_status = 'disabled_before_expiry' THEN 1 ELSE 0 END) / count(*), 1) / 100.0 AS cancelled_pct,
+  round(100.0 * sum(CASE WHEN final_status = 'no_record' THEN 1 ELSE 0 END) / count(*), 1) / 100.0 AS no_record_pct,
+  round(median(billings_eur_excl_vat), 2) AS median_price
 FROM ${subscription_status}
-WHERE period_months::varchar LIKE '${inputs.plan_filter.value}'
-GROUP BY 1, 2, 3
-ORDER BY product_group, subscriptions DESC
+WHERE period_months::varchar LIKE '${inputs.plan_filter.value}' AND final_status != 'excluded_unreliable'
+GROUP BY 1
+ORDER BY subscriptions DESC
 ```
 
 </Details>
 
 **Hosting has both the best retention and the lowest no-record rate of any product.** Domain and mail both show high no-record shares. Verified the tracking-gap claim directly rather than leaving it as a hand-wave: for `domain:.es` specifically, no-record sits at **50.6%** for subscriptions purchased before March 2022, vs. **9.2%** after — an 82% relative drop, confirming the gap is real and large, not a rounding artifact. Mail's smaller sample still makes it a lead rather than a settled finding.
+
+**Median, not average, for price:** domain's average price (€0.79) is nearly 3x its median (€0.27) — a right-skewed distribution where a handful of pricier TLDs pull the average up. Median better represents what a typical customer actually pays; average is shown elsewhere only where the total (not the typical case) is what matters.
 
 ### Hosting Isn't One Product: Shared vs. Cloud
 
@@ -356,11 +385,13 @@ ORDER BY product_group, subscriptions DESC
     valueFmt=pct1
 />
 
-<DataTable data={auto_renew_outcome_by_hosting_subgroup}>
+<DataTable data={auto_renew_outcome_by_hosting_subgroup_wide}>
   <Column id=product_sub_group title="Sub-group" />
-  <Column id=outcome />
   <Column id=subscriptions />
-  <Column id=pct fmt=pct1 />
+  <Column id=stayed_pct fmt=pct1 title="Stayed enabled" />
+  <Column id=cancelled_pct fmt=pct1 title="Cancelled" />
+  <Column id=no_record_pct fmt=pct1 title="No record" />
+  <Column id=median_price fmt='€#,##0.00' title="Median price" />
 </DataTable>
 
 <Details title="SQL query used for Hosting: Shared vs. Cloud">
@@ -368,28 +399,25 @@ ORDER BY product_group, subscriptions DESC
 ```sql
 SELECT
   product_sub_group,
-  CASE final_status
-    WHEN 'stayed_enabled' THEN 'Stayed enabled'
-    WHEN 'disabled_before_expiry' THEN 'Actively cancelled'
-    WHEN 'no_record' THEN 'No record'
-  END AS outcome,
-  final_status,
   count(*) AS subscriptions,
-  round(100.0 * count(*) / sum(count(*)) OVER (PARTITION BY product_sub_group), 1) / 100.0 AS pct
+  round(100.0 * sum(CASE WHEN final_status = 'stayed_enabled' THEN 1 ELSE 0 END) / count(*), 1) / 100.0 AS stayed_pct,
+  round(100.0 * sum(CASE WHEN final_status = 'disabled_before_expiry' THEN 1 ELSE 0 END) / count(*), 1) / 100.0 AS cancelled_pct,
+  round(100.0 * sum(CASE WHEN final_status = 'no_record' THEN 1 ELSE 0 END) / count(*), 1) / 100.0 AS no_record_pct,
+  round(median(billings_eur_excl_vat), 2) AS median_price
 FROM ${subscription_status}
-WHERE product_group = 'hosting'
-GROUP BY 1, 2, 3
-ORDER BY product_sub_group, subscriptions DESC
+WHERE product_group = 'hosting' AND final_status != 'excluded_unreliable'
+GROUP BY 1
+ORDER BY subscriptions DESC
 ```
 
 </Details>
 
-**Cloud hosting retains nearly 19 points better than shared (64.2% vs. 45.4%)**, with 282 subscriptions vs. shared's 14,162. Honest caveat: this substantially overlaps with the price→retention relationship already covered — cloud averages €18.30 vs. shared's €6.35. Still worth naming directly, though: "push more customers toward cloud hosting" is a concrete, actionable lever in a way "higher price bracket" alone isn't.
+**Cloud hosting retains nearly 19 points better than shared (64.2% vs. 45.4%)**, with 283 subscriptions vs. shared's 14,275. **Correcting a claim from an earlier draft:** using *average* price, cloud looked far pricier than shared (€18.36 vs. €6.36), suggesting the retention gap might just be the price story again. But cloud's *median* price is actually €4.80 — slightly *below* shared's €5.73 — because a handful of very expensive cloud plans distort the average. On the typical-customer price, cloud is not more expensive, yet it still retains 19 points better. **That weakens the "it's just price" explanation and strengthens the alternatives below.**
 
-**Plausible reasons beyond price, though none of these can be fully verified from this data:**
-- **Customer type likely differs.** Cloud hosting is typically bought by developers, agencies, or businesses running something with an actual operational dependency — not someone testing a hobby project. That's a stickier customer by nature, independent of price.
+**Plausible reasons, though none of these can be fully verified from this data:**
+- **Customer type likely differs.** Cloud hosting is typically bought by developers, agencies, or businesses running something with an actual operational dependency — not someone testing a hobby project. That's a stickier customer by nature.
 - **Switching costs are probably higher.** Migrating a cloud setup (DNS, deployments, configs) takes more effort than abandoning shared hosting, so even a dissatisfied customer has more friction to actually leave.
-- **The price confound can't be cleanly separated from these** with the columns available here — there's no field indicating business vs. personal use, which would be the real test of "cloud loyalty" vs. "price loyalty."
+- **No field in this data indicates business vs. personal use**, which would be the real test of "cloud loyalty" as its own effect rather than a proxy for something else.
 
 ### Domain TLDs Vary Enormously Too
 
@@ -442,11 +470,13 @@ ORDER BY subscriptions DESC
     valueFmt=pct1
 />
 
-<DataTable data={auto_renew_outcome_by_plan_length}>
-  <Column id=plan />
-  <Column id=outcome />
+<DataTable data={auto_renew_outcome_by_plan_length_wide}>
+  <Column id=plan title="Plan" />
   <Column id=subscriptions />
-  <Column id=pct fmt=pct1 />
+  <Column id=stayed_pct fmt=pct1 title="Stayed enabled" />
+  <Column id=cancelled_pct fmt=pct1 title="Cancelled" />
+  <Column id=no_record_pct fmt=pct1 title="No record" />
+  <Column id=median_price fmt='€#,##0.00' title="Median price" />
 </DataTable>
 
 <Details title="SQL query used for By Plan Length">
@@ -455,17 +485,15 @@ ORDER BY subscriptions DESC
 SELECT
   period_months || '-month' AS plan,
   period_months,
-  CASE final_status
-    WHEN 'stayed_enabled' THEN 'Stayed enabled'
-    WHEN 'disabled_before_expiry' THEN 'Actively cancelled'
-    WHEN 'no_record' THEN 'No record'
-  END AS outcome,
-  final_status,
   count(*) AS subscriptions,
-  round(100.0 * count(*) / sum(count(*)) OVER (PARTITION BY period_months), 1) / 100.0 AS pct
+  round(100.0 * sum(CASE WHEN final_status = 'stayed_enabled' THEN 1 ELSE 0 END) / count(*), 1) / 100.0 AS stayed_pct,
+  round(100.0 * sum(CASE WHEN final_status = 'disabled_before_expiry' THEN 1 ELSE 0 END) / count(*), 1) / 100.0 AS cancelled_pct,
+  round(100.0 * sum(CASE WHEN final_status = 'no_record' THEN 1 ELSE 0 END) / count(*), 1) / 100.0 AS no_record_pct,
+  round(median(billings_eur_excl_vat), 2) AS median_price
 FROM ${subscription_status}
-GROUP BY 1, 2, 3, 4
-ORDER BY period_months, subscriptions DESC
+WHERE final_status != 'excluded_unreliable'
+GROUP BY 1, 2
+ORDER BY period_months
 ```
 
 </Details>
@@ -484,11 +512,12 @@ Boundaries were checked against the real data before picking them: 95.4% of subs
     valueFmt=pct1
 />
 
-<DataTable data={auto_renew_outcome_by_price}>
+<DataTable data={auto_renew_outcome_by_price_wide}>
   <Column id=price_bucket title="Price" />
-  <Column id=outcome />
   <Column id=subscriptions />
-  <Column id=pct fmt=pct1 />
+  <Column id=stayed_pct fmt=pct1 title="Stayed enabled" />
+  <Column id=cancelled_pct fmt=pct1 title="Cancelled" />
+  <Column id=no_record_pct fmt=pct1 title="No record" />
 </DataTable>
 
 <Details title="SQL query used for By Price Range">
@@ -502,25 +531,14 @@ SELECT
     WHEN billings_eur_excl_vat < 20 THEN '4. €10-20'
     ELSE '5. €20+'
   END AS price_bucket,
-  CASE final_status
-    WHEN 'stayed_enabled' THEN 'Stayed enabled'
-    WHEN 'disabled_before_expiry' THEN 'Actively cancelled'
-    WHEN 'no_record' THEN 'No record'
-  END AS outcome,
-  final_status,
   count(*) AS subscriptions,
-  round(100.0 * count(*) / sum(count(*)) OVER (PARTITION BY
-    CASE
-      WHEN billings_eur_excl_vat = 0  THEN '1. Free (€0)'
-      WHEN billings_eur_excl_vat < 5  THEN '2. €0.01-5'
-      WHEN billings_eur_excl_vat < 10 THEN '3. €5-10'
-      WHEN billings_eur_excl_vat < 20 THEN '4. €10-20'
-      ELSE '5. €20+'
-    END), 1) / 100.0 AS pct
+  round(100.0 * sum(CASE WHEN final_status = 'stayed_enabled' THEN 1 ELSE 0 END) / count(*), 1) / 100.0 AS stayed_pct,
+  round(100.0 * sum(CASE WHEN final_status = 'disabled_before_expiry' THEN 1 ELSE 0 END) / count(*), 1) / 100.0 AS cancelled_pct,
+  round(100.0 * sum(CASE WHEN final_status = 'no_record' THEN 1 ELSE 0 END) / count(*), 1) / 100.0 AS no_record_pct
 FROM ${subscription_status}
-WHERE period_months::varchar LIKE '${inputs.plan_filter.value}'
-GROUP BY 1, 2, 3
-ORDER BY price_bucket, subscriptions DESC
+WHERE period_months::varchar LIKE '${inputs.plan_filter.value}' AND final_status != 'excluded_unreliable'
+GROUP BY 1
+ORDER BY price_bucket
 ```
 
 </Details>
@@ -539,11 +557,12 @@ Card/bank and crypto alone don't cover 100% of subscriptions — they're 85.1% o
     valueFmt=pct1
 />
 
-<DataTable data={auto_renew_outcome_by_payment_gateway}>
+<DataTable data={auto_renew_outcome_by_payment_gateway_wide}>
   <Column id=gateway_type title="Gateway type" />
-  <Column id=outcome />
   <Column id=subscriptions />
-  <Column id=pct fmt=pct1 />
+  <Column id=stayed_pct fmt=pct1 title="Stayed enabled" />
+  <Column id=cancelled_pct fmt=pct1 title="Cancelled" />
+  <Column id=no_record_pct fmt=pct1 title="No record" />
 </DataTable>
 
 <Details title="SQL query used for By Payment Gateway Type">
@@ -556,24 +575,14 @@ SELECT
     WHEN payment_gateway IS NULL THEN '3. No gateway on file'
     ELSE '4. Other'
   END AS gateway_type,
-  CASE final_status
-    WHEN 'stayed_enabled' THEN 'Stayed enabled'
-    WHEN 'disabled_before_expiry' THEN 'Actively cancelled'
-    WHEN 'no_record' THEN 'No record'
-  END AS outcome,
-  final_status,
   count(*) AS subscriptions,
-  round(100.0 * count(*) / sum(count(*)) OVER (PARTITION BY
-    CASE
-      WHEN payment_gateway IN ('coingate','coinpayments') THEN '2. Crypto'
-      WHEN payment_gateway IN ('checkout','credorax','paypal') THEN '1. Card / bank'
-      WHEN payment_gateway IS NULL THEN '3. No gateway on file'
-      ELSE '4. Other'
-    END), 1) / 100.0 AS pct
+  round(100.0 * sum(CASE WHEN final_status = 'stayed_enabled' THEN 1 ELSE 0 END) / count(*), 1) / 100.0 AS stayed_pct,
+  round(100.0 * sum(CASE WHEN final_status = 'disabled_before_expiry' THEN 1 ELSE 0 END) / count(*), 1) / 100.0 AS cancelled_pct,
+  round(100.0 * sum(CASE WHEN final_status = 'no_record' THEN 1 ELSE 0 END) / count(*), 1) / 100.0 AS no_record_pct
 FROM ${subscription_status}
-WHERE period_months::varchar LIKE '${inputs.plan_filter.value}'
-GROUP BY 1, 2, 3
-ORDER BY gateway_type, subscriptions DESC
+WHERE period_months::varchar LIKE '${inputs.plan_filter.value}' AND final_status != 'excluded_unreliable'
+GROUP BY 1
+ORDER BY gateway_type
 ```
 
 </Details>
@@ -718,11 +727,11 @@ Mean: 270.5 days · Median: 336.0 days — heavily back-loaded to the final quar
     valueFmt=pct1
 />
 
-<DataTable data={auto_renew_returning_customers_outcome}>
+<DataTable data={auto_renew_returning_customers_outcome_wide}>
   <Column id=grp title="Group" />
-  <Column id=outcome />
   <Column id=n title="Subscriptions" />
-  <Column id=pct fmt=pct1 />
+  <Column id=stayed_pct fmt=pct1 title="Stayed enabled" />
+  <Column id=cancelled_pct fmt=pct1 title="Cancelled" />
 </DataTable>
 
 <Details title="SQL query used for Returning Customers">
@@ -730,18 +739,13 @@ Mean: 270.5 days · Median: 336.0 days — heavily back-loaded to the final quar
 ```sql
 SELECT
   CASE WHEN n_windows > 1 THEN 'Toggled more than once' ELSE 'Never toggled back' END AS grp,
-  CASE final_status
-    WHEN 'stayed_enabled' THEN 'Stayed enabled'
-    WHEN 'disabled_before_expiry' THEN 'Actively cancelled'
-  END AS outcome,
-  final_status,
   count(*) AS n,
-  round(100.0 * count(*) / sum(count(*)) OVER (PARTITION BY
-    CASE WHEN n_windows > 1 THEN 'Toggled more than once' ELSE 'Never toggled back' END), 1) / 100.0 AS pct
+  round(100.0 * sum(CASE WHEN final_status = 'stayed_enabled' THEN 1 ELSE 0 END) / count(*), 1) / 100.0 AS stayed_pct,
+  round(100.0 * sum(CASE WHEN final_status = 'disabled_before_expiry' THEN 1 ELSE 0 END) / count(*), 1) / 100.0 AS cancelled_pct
 FROM ${subscription_status}
-WHERE final_status != 'no_record'
-GROUP BY 1, 2, 3
-ORDER BY grp, n DESC
+WHERE final_status NOT IN ('no_record', 'excluded_unreliable')
+GROUP BY 1
+ORDER BY grp
 ```
 
 </Details>
@@ -753,6 +757,8 @@ ORDER BY grp, n DESC
 # Seasonality
 
 For 12-month plans, the renewal date falls in the same calendar month as the original purchase, a year later; for 1-month plans it's simply the following month. Toggle between them below — the two plan lengths have different volumes and different patterns, so they're shown one at a time rather than blended. Full dataset, all three outcomes, no date filter applied.
+
+**Each bar is a sum across every year in the dataset (renewal dates span 2021-2023), not a single year's volume** — deliberately, so a one-off spike in any single year doesn't get mistaken for a real seasonal pattern.
 
 <Dropdown name=seasonality_plan>
     <DropdownOption value=12 valueLabel="12-month plans"/>
@@ -774,7 +780,7 @@ For 12-month plans, the renewal date falls in the same calendar month as the ori
 
 <DataTable data={auto_renew_seasonality_by_renewal_month}>
   <Column id=renewal_month title="Month" />
-  <Column id=total />
+  <Column id=total title="Total (all years combined)" />
   <Column id=stayed_pct fmt=pct1 title="Stayed enabled" />
   <Column id=cancelled_pct fmt=pct1 title="Cancelled" />
   <Column id=no_record_pct fmt=pct1 title="No record" />
@@ -808,7 +814,7 @@ ORDER BY 1
 
 # Explore: Outcome Over Time
 
-An open-ended view for digging into any product or TLD directly — pick a product group, then optionally narrow to a specific slug (e.g. a single domain TLD), and watch how the three outcomes trend by signup month.
+An open-ended view for digging into any product or TLD directly — pick a product group, then optionally narrow to a specific slug (e.g. a single domain TLD), and watch how the three outcomes trend by signup month. **Different lens from Seasonality above:** Seasonality collapses every year into one Jan-Dec pattern to isolate a *repeating* calendar effect; this view is the raw chronological timeline (actual year-month) for a specific product, with no year-collapsing.
 
 <Dropdown data={auto_renew_distinct_product_groups} name=group_filter value=product_group>
     <DropdownOption value="%" valueLabel="All product groups"/>
