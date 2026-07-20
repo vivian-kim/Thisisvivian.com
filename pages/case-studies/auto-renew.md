@@ -209,7 +209,7 @@ SELECT
   END AS outcome,
   final_status,
   count(*) AS subscriptions,
-  round(100.0 * count(*) / sum(count(*)) OVER (), 1) AS pct
+  round(100.0 * count(*) / sum(count(*)) OVER (), 1) / 100.0 AS pct
 FROM ${subscription_status}
 WHERE period_months::varchar LIKE '${inputs.plan_filter.value}'
 GROUP BY 1, 2
@@ -289,7 +289,7 @@ SELECT
   product_slug,
   count(*) AS subscriptions,
   round(sum(CASE WHEN final_status = 'disabled_before_expiry' THEN billings_eur_excl_vat ELSE 0 END), 2) AS cancelled_revenue,
-  round(100.0 * sum(CASE WHEN final_status = 'disabled_before_expiry' THEN 1 ELSE 0 END) / count(*), 1) AS cancelled_pct
+  round(100.0 * sum(CASE WHEN final_status = 'disabled_before_expiry' THEN 1 ELSE 0 END) / count(*), 1) / 100.0 AS cancelled_pct
 FROM ${subscription_status}
 WHERE final_status != 'excluded_unreliable'
 GROUP BY 1
@@ -333,7 +333,7 @@ SELECT
   END AS outcome,
   final_status,
   count(*) AS subscriptions,
-  round(100.0 * count(*) / sum(count(*)) OVER (PARTITION BY product_group), 1) AS pct
+  round(100.0 * count(*) / sum(count(*)) OVER (PARTITION BY product_group), 1) / 100.0 AS pct
 FROM ${subscription_status}
 WHERE period_months::varchar LIKE '${inputs.plan_filter.value}'
 GROUP BY 1, 2, 3
@@ -375,7 +375,7 @@ SELECT
   END AS outcome,
   final_status,
   count(*) AS subscriptions,
-  round(100.0 * count(*) / sum(count(*)) OVER (PARTITION BY product_sub_group), 1) AS pct
+  round(100.0 * count(*) / sum(count(*)) OVER (PARTITION BY product_sub_group), 1) / 100.0 AS pct
 FROM ${subscription_status}
 WHERE product_group = 'hosting'
 GROUP BY 1, 2, 3
@@ -410,9 +410,9 @@ Same issue, one level down — "Domain" (29.1% stayed) hides a wide range across
 SELECT
   product_slug,
   count(*) AS subscriptions,
-  round(100.0 * sum(CASE WHEN final_status = 'stayed_enabled' THEN 1 ELSE 0 END) / count(*), 1) AS stayed_pct,
-  round(100.0 * sum(CASE WHEN final_status = 'disabled_before_expiry' THEN 1 ELSE 0 END) / count(*), 1) AS cancelled_pct,
-  round(100.0 * sum(CASE WHEN final_status = 'no_record' THEN 1 ELSE 0 END) / count(*), 1) AS no_record_pct,
+  round(100.0 * sum(CASE WHEN final_status = 'stayed_enabled' THEN 1 ELSE 0 END) / count(*), 1) / 100.0 AS stayed_pct,
+  round(100.0 * sum(CASE WHEN final_status = 'disabled_before_expiry' THEN 1 ELSE 0 END) / count(*), 1) / 100.0 AS cancelled_pct,
+  round(100.0 * sum(CASE WHEN final_status = 'no_record' THEN 1 ELSE 0 END) / count(*), 1) / 100.0 AS no_record_pct,
   round(avg(billings_eur_excl_vat), 2) AS avg_price
 FROM ${subscription_status}
 WHERE product_group = 'domain'
@@ -462,7 +462,7 @@ SELECT
   END AS outcome,
   final_status,
   count(*) AS subscriptions,
-  round(100.0 * count(*) / sum(count(*)) OVER (PARTITION BY period_months), 1) AS pct
+  round(100.0 * count(*) / sum(count(*)) OVER (PARTITION BY period_months), 1) / 100.0 AS pct
 FROM ${subscription_status}
 GROUP BY 1, 2, 3, 4
 ORDER BY period_months, subscriptions DESC
@@ -516,7 +516,7 @@ SELECT
       WHEN billings_eur_excl_vat < 10 THEN '3. €5-10'
       WHEN billings_eur_excl_vat < 20 THEN '4. €10-20'
       ELSE '5. €20+'
-    END), 1) AS pct
+    END), 1) / 100.0 AS pct
 FROM ${subscription_status}
 WHERE period_months::varchar LIKE '${inputs.plan_filter.value}'
 GROUP BY 1, 2, 3
@@ -569,7 +569,7 @@ SELECT
       WHEN payment_gateway IN ('checkout','credorax','paypal') THEN '1. Card / bank'
       WHEN payment_gateway IS NULL THEN '3. No gateway on file'
       ELSE '4. Other'
-    END), 1) AS pct
+    END), 1) / 100.0 AS pct
 FROM ${subscription_status}
 WHERE period_months::varchar LIKE '${inputs.plan_filter.value}'
 GROUP BY 1, 2, 3
@@ -737,7 +737,7 @@ SELECT
   final_status,
   count(*) AS n,
   round(100.0 * count(*) / sum(count(*)) OVER (PARTITION BY
-    CASE WHEN n_windows > 1 THEN 'Toggled more than once' ELSE 'Never toggled back' END), 1) AS pct
+    CASE WHEN n_windows > 1 THEN 'Toggled more than once' ELSE 'Never toggled back' END), 1) / 100.0 AS pct
 FROM ${subscription_status}
 WHERE final_status != 'no_record'
 GROUP BY 1, 2, 3
@@ -786,9 +786,9 @@ For 12-month plans, the renewal date falls in the same calendar month as the ori
 SELECT
   strftime(ended_at, '%m-%b') AS renewal_month,
   count(*) AS total,
-  round(100.0 * sum(CASE WHEN final_status = 'stayed_enabled' THEN 1 ELSE 0 END) / count(*), 1) AS stayed_pct,
-  round(100.0 * sum(CASE WHEN final_status = 'disabled_before_expiry' THEN 1 ELSE 0 END) / count(*), 1) AS cancelled_pct,
-  round(100.0 * sum(CASE WHEN final_status = 'no_record' THEN 1 ELSE 0 END) / count(*), 1) AS no_record_pct
+  round(100.0 * sum(CASE WHEN final_status = 'stayed_enabled' THEN 1 ELSE 0 END) / count(*), 1) / 100.0 AS stayed_pct,
+  round(100.0 * sum(CASE WHEN final_status = 'disabled_before_expiry' THEN 1 ELSE 0 END) / count(*), 1) / 100.0 AS cancelled_pct,
+  round(100.0 * sum(CASE WHEN final_status = 'no_record' THEN 1 ELSE 0 END) / count(*), 1) / 100.0 AS no_record_pct
 FROM ${subscription_status}
 WHERE period_months = ${inputs.seasonality_plan.value} AND final_status != 'excluded_unreliable'
 GROUP BY 1

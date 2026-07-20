@@ -8,7 +8,7 @@ SELECT
   END AS outcome,
   final_status,
   count(*) AS subscriptions,
-  round(100.0 * count(*) / sum(count(*)) OVER (PARTITION BY period_months), 1) AS pct
+  round(100.0 * count(*) / sum(count(*)) OVER (PARTITION BY period_months), 1) / 100.0 AS pct
 FROM ${subscription_status}
 WHERE final_status != 'excluded_unreliable'
 GROUP BY 1, 2, 3, 4

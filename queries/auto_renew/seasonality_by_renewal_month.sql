@@ -4,9 +4,9 @@
 SELECT
   strftime(ended_at, '%m-%b') AS renewal_month,
   count(*) AS total,
-  round(100.0 * sum(CASE WHEN final_status = 'stayed_enabled' THEN 1 ELSE 0 END) / count(*), 1) AS stayed_pct,
-  round(100.0 * sum(CASE WHEN final_status = 'disabled_before_expiry' THEN 1 ELSE 0 END) / count(*), 1) AS cancelled_pct,
-  round(100.0 * sum(CASE WHEN final_status = 'no_record' THEN 1 ELSE 0 END) / count(*), 1) AS no_record_pct
+  round(100.0 * sum(CASE WHEN final_status = 'stayed_enabled' THEN 1 ELSE 0 END) / count(*), 1) / 100.0 AS stayed_pct,
+  round(100.0 * sum(CASE WHEN final_status = 'disabled_before_expiry' THEN 1 ELSE 0 END) / count(*), 1) / 100.0 AS cancelled_pct,
+  round(100.0 * sum(CASE WHEN final_status = 'no_record' THEN 1 ELSE 0 END) / count(*), 1) / 100.0 AS no_record_pct
 FROM ${subscription_status}
 WHERE period_months = ${inputs.seasonality_plan.value} AND final_status != 'excluded_unreliable'
 GROUP BY 1

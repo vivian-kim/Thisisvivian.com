@@ -18,7 +18,7 @@ SELECT
       WHEN payment_gateway IN ('checkout','credorax','paypal') THEN '1. Card / bank'
       WHEN payment_gateway IS NULL THEN '3. No gateway on file'
       ELSE '4. Other'
-    END), 1) AS pct
+    END), 1) / 100.0 AS pct
 FROM ${subscription_status}
 WHERE period_months::varchar LIKE '${inputs.plan_filter.value}' AND final_status != 'excluded_unreliable'
 GROUP BY 1, 2, 3

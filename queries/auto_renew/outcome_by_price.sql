@@ -20,7 +20,7 @@ SELECT
       WHEN billings_eur_excl_vat < 10 THEN '3. €5-10'
       WHEN billings_eur_excl_vat < 20 THEN '4. €10-20'
       ELSE '5. €20+'
-    END), 1) AS pct
+    END), 1) / 100.0 AS pct
 FROM ${subscription_status}
 WHERE period_months::varchar LIKE '${inputs.plan_filter.value}' AND final_status != 'excluded_unreliable'
 GROUP BY 1, 2, 3
