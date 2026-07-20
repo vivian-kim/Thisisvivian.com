@@ -211,6 +211,61 @@ GROUP BY 1 ORDER BY 1;
 
 **Over half of all cancellations happen in the final 30 days before renewal** — almost certainly a reaction to renewal-reminder emails or notifications, not a random-time decision. This is the single most concentrated, addressable moment in the entire customer journey.
 
+### Cancellation Duration, by Plan Length
+
+A related but distinct question: not "how close to renewal" but "how long did the customer keep auto-renew on before switching it off," measured from the start of the subscription. Split by plan length, since a 1-month plan and a 12-month plan have very different possible durations.
+
+**1-month plans** (max possible: 30 days, n=145)
+
+| Duration kept on | Count | % |
+|---|---|---|
+| 0-3 days | 17 | 11.7% |
+| 4-7 days | 10 | 6.9% |
+| 8-14 days | 32 | 22.1% |
+| 15-21 days | 54 | 37.2% |
+| 22-30 days | 32 | 22.1% |
+
+Mean: 15.5 days · Median: 17 days — roughly the halfway point of the term, fairly spread out.
+
+**12-month plans** (max possible: 364 days, n=8,859)
+
+| Duration kept on | Count | % |
+|---|---|---|
+| 0-7 days | 339 | 3.8% |
+| 8-30 days | 363 | 4.1% |
+| 31-90 days | 453 | 5.1% |
+| 91-180 days | 592 | 6.7% |
+| 181-270 days | 740 | 8.4% |
+| **271-365 days** | **6,372** | **71.9%** |
+
+Mean: 278 days · Median: 337 days — heavily back-loaded to the final quarter of the year.
+
+<details>
+<summary>SQL query used for the cancellation duration analysis</summary>
+
+```sql
+SELECT
+  period_months,
+  CASE
+    WHEN days_to_disable <= 7 THEN '0-7 days'
+    WHEN days_to_disable <= 30 THEN '8-30 days'
+    WHEN days_to_disable <= 90 THEN '31-90 days'
+    WHEN days_to_disable <= 180 THEN '91-180 days'
+    WHEN days_to_disable <= 270 THEN '181-270 days'
+    ELSE '271-365 days'
+  END AS cancellation_duration,
+  count(*) AS n,
+  round(100.0 * count(*) / sum(count(*)) OVER (PARTITION BY period_months), 1) AS pct
+FROM sub_status_clean
+WHERE final_status = 'disabled_before_expiry' AND days_to_disable >= 0
+GROUP BY 1, 2 ORDER BY 1, 2;
+```
+</details>
+
+**The two plan types tell genuinely different stories once separated.** Monthly cancellations are fairly spread out across the term — no sharp late spike. Annual cancellations are massively concentrated in the final 3 months (71.9% of them), right before the renewal charge. This strengthens the "annual sticker shock" theory: it isn't a general late-term pattern, it's specific to the size of the annual charge — the monthly plan, with its own much smaller renewal amount, doesn't show the same last-minute concentration.
+
+*(Note: one subscription with an impossible negative duration — its logged auto-renew window predates the subscription's own start date — was excluded from this analysis as a data error, consistent with the other isolated data-quality issues below.)*
+
 ## Data Quality Findings
 
 Three distinct issues surfaced during analysis, kept separate from the behavioral findings above since none of them changed the core conclusions but all are worth reporting to the data/engineering team.
