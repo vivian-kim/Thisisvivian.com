@@ -27,7 +27,6 @@ queries:
   - auto_renew/distinct_product_groups.sql
   - auto_renew/distinct_product_slugs.sql
   - auto_renew/outcome_timeseries.sql
-  - auto_renew/outcome_timeseries_wide.sql
 ---
 
 A subscription-based hosting/domain provider needed to understand **when users tend to enable or disable their auto-renew**. The goal was to understand behavioural patterns and provide actionable insights and suggestions to improve the auto-renew rate, for non-technical stakeholders on the product team.
@@ -179,9 +178,9 @@ Every subscription lands in exactly one of the three main outcome segments, plus
 **Filter the Overall, Product, Price, and Gateway charts below by plan length.** This is the single factor that changes almost every finding in this report, so it's worth exploring interactively rather than only as static tables:
 
 <Dropdown name=plan_filter>
-    <DropdownOption value=% valueLabel="All plans"/>
-    <DropdownOption value=1 valueLabel="1-month only"/>
-    <DropdownOption value=12 valueLabel="12-month only"/>
+    <DropdownOption value="%" valueLabel="All plans"/>
+    <DropdownOption value="1" valueLabel="1-month only"/>
+    <DropdownOption value="12" valueLabel="12-month only"/>
 </Dropdown>
 
 ## Overall
@@ -770,8 +769,8 @@ This is the same one-outcome-per-subscription view as the Signup Cohorts section
 **Each bar is a sum across every year in the dataset (renewal dates span 2021-2023), not a single year's volume**, so a one-off spike in any single year doesn't get mistaken for a real seasonal pattern.
 
 <Dropdown name=seasonality_plan>
-    <DropdownOption value=12 valueLabel="12-month plans"/>
-    <DropdownOption value=1 valueLabel="1-month plans"/>
+    <DropdownOption value="12" valueLabel="12-month plans"/>
+    <DropdownOption value="1" valueLabel="1-month plans"/>
 </Dropdown>
 
 <BarChart
@@ -864,47 +863,6 @@ On the 1-month view, November sits at 58.7% stayed. That's unremarkable, near th
     <ReferenceLine x='2022-03-01' label="Tracking fix visible" hideValue=true/>
 </LineChart>
 
-<Details title="Same data as a cancellation-rate trend against total volume, plus the exact per-outcome % for every month">
-
-<BarChart
-    data={auto_renew_outcome_timeseries_wide}
-    x=month
-    y=subscriptions
-    y2SeriesType=line
-    y2=cancelled_pct
-    y2Fmt=pct1
-    chartAreaHeight=300
-/>
-
-<DataTable data={auto_renew_outcome_timeseries_wide}>
-  <Column id=month />
-  <Column id=subscriptions />
-  <Column id=stayed_pct fmt=pct1 title="Stayed enabled" />
-  <Column id=cancelled_pct fmt=pct1 title="Cancelled" />
-  <Column id=no_record_pct fmt=pct1 title="No record" />
-</DataTable>
-
-<Details title="SQL query used for the volume + cancellation-rate chart and table above">
-
-```sql
-SELECT
-  date_trunc('month', started_at) AS month,
-  count(*) AS subscriptions,
-  round(100.0 * sum(CASE WHEN final_status = 'stayed_enabled' THEN 1 ELSE 0 END) / count(*), 1) / 100.0 AS stayed_pct,
-  round(100.0 * sum(CASE WHEN final_status = 'disabled_before_expiry' THEN 1 ELSE 0 END) / count(*), 1) / 100.0 AS cancelled_pct,
-  round(100.0 * sum(CASE WHEN final_status = 'no_record' THEN 1 ELSE 0 END) / count(*), 1) / 100.0 AS no_record_pct
-FROM ${subscription_status}
-WHERE product_group LIKE '${inputs.group_filter.value}'
-  AND product_slug LIKE '${inputs.slug_filter.value}'
-  AND final_status != 'excluded_unreliable'
-GROUP BY 1
-ORDER BY 1
-```
-
-</Details>
-
-</Details>
-
 <Details title="What the month-by-month numbers show">
 
 No-record spikes as high as 68% (June 2021) and stays elevated through February 2022. Then it drops sharply to a stable 11-16% from March 2022 onward, matching the tracking-gap cutoff used throughout this report. As no-record falls, cancelled % rises in near lock-step, from the 20-30% range pre-2022 to 37-56% from March 2022 on. The most likely read is that many pre-March-2022 "no record" subscriptions were real cancellations that just weren't logged. Once tracking improved, the true cancel rate became visible, not higher.
@@ -943,6 +901,8 @@ The slug dropdown updates to only show slugs belonging to the currently selected
 ---
 
 # Appendix: Assumptions, Limitations & Data Quality Findings
+
+<Details title="Click to expand: judgement calls, open questions, and data issues found during analysis">
 
 Before acting on anything above, here's what could complicate it: judgement calls made along the way, open questions, and data issues found and corrected during analysis.
 
@@ -1043,6 +1003,8 @@ ORDER BY exclusion_reason, subscription_id
 </Details>
 
 Excluding these 20 records (0.058% of 34,411) doesn't change any headline percentage at 1 decimal place (37.4% / 36.6% / 26.0%). Both bugs should go to the data team as bug reports, and these 20 can be re-classified once the root cause is confirmed.
+
+</Details>
 
 ---
 
