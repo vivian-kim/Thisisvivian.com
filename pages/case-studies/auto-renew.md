@@ -93,6 +93,19 @@ Key questions included:
 
 </Details>
 
+<Details title="Glossary — what the terms in this report mean (click to expand)">
+
+- **Stayed enabled:** auto-renew was on and still on when the term ended — the customer was set to renew.
+- **Actively cancelled:** auto-renew was turned on at some point, then turned off again before the term ended.
+- **No record:** we cannot say whether this subscription was ever auto-renewed or cancelled — `is_auto_renew` is blank, so no enable *or* disable event was ever logged. This is **not** a missing subscription: `started_at`/`ended_at` (the term itself) are always present, with zero nulls across the entire dataset. It's specifically `ar_valid_from`/`ar_valid_to` (the auto-renew on/off dates) that are missing — the auto-renew status is simply unobserved, not "cancelled," not "confirmed enabled." See Assumptions and Limitations in the Appendix for the two live theories on why.
+- **Excluded — unreliable record:** a small group of 20 subscriptions with corrupted `ar_valid_from`/`ar_valid_to` dates (a logically impossible order, or a window that predates the subscription itself). Held out of every chart, table, and percentage in this report — see the Appendix for the full breakdown.
+- **`ar_valid_from` / `ar_valid_to`:** the raw column names for the date auto-renew was turned on / turned off, respectively. Dates only, no timestamps — anything that happens and reverses within the same day is invisible to this data.
+- **Renewal date:** the date a subscription's current term ends (`ended_at`) — the point at which auto-renew would trigger the next charge, if it's on.
+- **Term / plan length:** the subscription's billing cycle length — either 1 month or 12 months (`period_months`), never anything else in this dataset.
+- **Status-change log:** the raw file isn't one row per subscription — see the structural note above.
+
+</Details>
+
 ---
 
 # Auto-Renew Outcomes by Segment
@@ -980,6 +993,8 @@ Before acting on anything above, here's what could complicate it: judgment calls
 
   Subscriptions purchased before March 2022 show a "no record" rate as high as 68% in some months, vs. a stable ~11-16% from March 2022 onward. Treated as a logging/rollout gap, not real customer behavior. Every figure in this report includes the full dataset (34,411 subscriptions) — the older cohort is simply more likely to land in the "no record" bucket than it should.
 
+  **Deliberately not allocated to "stayed enabled" or "cancelled," for two reasons.** First, the size: 26.0% (8,945 subscriptions) is too large to guess in either direction — assuming all of it is cancelled pushes the cancel rate to 63.4%, assuming all of it stayed enabled pushes retention to 62.6%, and neither guess is more justified than the other. Second, the sharp, dated drop (68% down to a stable 11-16%, specifically at March 2022) looks like a fix being introduced, not a gradual improvement — that's a logging/rollout issue with a knowable, fixable root cause, not a permanent gap that has to be estimated around. **The recommendation is to track down and fix the underlying issue, not to model or impute the missing values** (see Recommendation #6).
+
   </Details>
 
 - **26.0% of subscriptions have zero evidence auto-renew was ever touched — kept as its own category rather than guessed at, because we can't tell why.**
@@ -1163,13 +1178,15 @@ ORDER BY exclusion_reason, subscription_id
 
    </Details>
 
-6. **Resolve the "no record" ambiguity with the data owner.** The single biggest open question in this whole analysis.
+6. **Track down and fix the "no record" logging gap — don't model or guess around it.** The single biggest open question in this whole analysis, and at 26.0% (8,945 subscriptions) too large to leave unresolved.
 
    <Details title="Why">
 
    Does a blank `is_auto_renew` mean auto-renew was enabled and cancelled within the same session — too fast to log, since the data only has dates, not timestamps — or that it was never touched at all? The checkout-checkbox theory is already ruled out (no such option exists in the flow), narrowing this to one real question: could the logging system miss a sub-day (same-session) on/off event? See Assumptions and Limitations in the Appendix.
 
-   **How this report treated it:** kept as its own `no_record` category everywhere — every chart, table, and percentage in this report — never folded into "cancelled" or "stayed enabled," and never assumed to be either. Until the question above is answered, that's the only defensible choice: assuming it either way would silently bake an unconfirmed guess into every headline number.
+   **Why this is a fixable bug, not a permanent gap:** the no-record rate isn't a flat, ongoing problem — it drops sharply and specifically at March 2022 (from as high as 68% in some months down to a stable 11-16%), which looks like a fix was already introduced then, whether intentional or not. That's a strong reason to believe the root cause is findable and fixable, not something that has to be lived with indefinitely.
+
+   **How this report treated it in the meantime:** kept as its own `no_record` category everywhere — every chart, table, and percentage in this report — never folded into "cancelled" or "stayed enabled," and never allocated proportionally either. The segment is too large to guess in either direction (allocating it all to cancelled pushes the cancel rate to 63.4%; all to stayed enabled pushes retention to 62.6%) — assuming it either way would silently bake an unconfirmed guess into every headline number. The fix is to find and resolve the logging issue, not to estimate around it.
 
    </Details>
 
