@@ -34,7 +34,7 @@ queries:
 
 A subscription-based hosting/domain provider needed to understand **when users tend to enable or disable their auto-renew**. The goal was to understand behavioral patterns and provide actionable insights and suggestions to improve the auto-renew rate, for non-technical stakeholders on the product team.
 
-**In short:** most subscriptions aren't failing to activate auto-renew — they're activating it, then actively cancelling later, usually right before the big annual charge would hit.
+**In short:** most subscriptions aren't failing to activate auto-renew — they're usually default-activated, then actively cancelled later, usually right before the big annual charge would hit.
 
 Key questions included:
 - When do customers tend to enable or disable auto-renew?
@@ -223,9 +223,10 @@ Active cancellation and staying enabled are almost tied as the two largest outco
     y=revenue_eur
     yFmt='€#,##0'
     labels=true
-    labelPosition=center
+    labelPosition=right
     labelFmt='€#,##0'
-    chartAreaHeight=300
+    swapXY=true
+    chartAreaHeight=220
 />
 
 <DataTable data={auto_renew_revenue_cancelled_vs_rest}>
@@ -238,7 +239,7 @@ Active cancellation and staying enabled are almost tied as the two largest outco
 
 ```sql
 SELECT
-  CASE WHEN final_status = 'disabled_before_expiry' THEN '1. Lost to cancellation' ELSE '2. Everything else' END AS bucket,
+  CASE WHEN final_status = 'disabled_before_expiry' THEN '1. Lost to cancellation' ELSE '2. Not lost (stayed enabled + no record)' END AS bucket,
   round(sum(billings_eur_excl_vat), 2) AS revenue_eur,
   round(100.0 * sum(billings_eur_excl_vat) / sum(sum(billings_eur_excl_vat)) OVER (), 1) / 100.0 AS pct_of_total
 FROM ${subscription_status}
@@ -820,7 +821,7 @@ For 12-month plans, the renewal date falls in the same calendar month as the ori
 <BarChart
     data={auto_renew_seasonality_by_renewal_month}
     x=renewal_month
-    y=total
+    y=term_end_subscriptions
     y2SeriesType=line
     y2=stayed_pct
     y2Fmt=pct1
@@ -832,7 +833,7 @@ For 12-month plans, the renewal date falls in the same calendar month as the ori
 
 <DataTable data={auto_renew_seasonality_by_renewal_month}>
   <Column id=renewal_month title="Month" />
-  <Column id=total title="Total (all years combined)" />
+  <Column id=term_end_subscriptions title="Subscriptions with term ending this month (all years combined)" />
   <Column id=stayed_pct fmt=pct1 title="Stayed enabled" />
   <Column id=cancelled_pct fmt=pct1 title="Cancelled" />
   <Column id=no_record_pct fmt=pct1 title="No record" />
@@ -843,7 +844,7 @@ For 12-month plans, the renewal date falls in the same calendar month as the ori
 ```sql
 SELECT
   strftime(ended_at, '%m-%b') AS renewal_month,
-  count(*) AS total,
+  count(*) AS term_end_subscriptions,
   round(100.0 * sum(CASE WHEN final_status = 'stayed_enabled' THEN 1 ELSE 0 END) / count(*), 1) / 100.0 AS stayed_pct,
   round(100.0 * sum(CASE WHEN final_status = 'disabled_before_expiry' THEN 1 ELSE 0 END) / count(*), 1) / 100.0 AS cancelled_pct,
   round(100.0 * sum(CASE WHEN final_status = 'no_record' THEN 1 ELSE 0 END) / count(*), 1) / 100.0 AS no_record_pct
@@ -889,7 +890,7 @@ An open-ended view for digging into any product or TLD directly — pick a produ
     chartAreaHeight=350
 />
 
-**Cancellation rate trend (line), against total volume (bars) — the exact per-outcome % for every month is in the table below:**
+<Details title="Same data as a cancellation-rate trend against total volume, plus the exact per-outcome % for every month">
 
 <BarChart
     data={auto_renew_outcome_timeseries_wide}
@@ -908,6 +909,27 @@ An open-ended view for digging into any product or TLD directly — pick a produ
   <Column id=cancelled_pct fmt=pct1 title="Cancelled" />
   <Column id=no_record_pct fmt=pct1 title="No record" />
 </DataTable>
+
+<Details title="SQL query used for the volume + cancellation-rate chart and table above">
+
+```sql
+SELECT
+  date_trunc('month', started_at) AS month,
+  count(*) AS subscriptions,
+  round(100.0 * sum(CASE WHEN final_status = 'stayed_enabled' THEN 1 ELSE 0 END) / count(*), 1) / 100.0 AS stayed_pct,
+  round(100.0 * sum(CASE WHEN final_status = 'disabled_before_expiry' THEN 1 ELSE 0 END) / count(*), 1) / 100.0 AS cancelled_pct,
+  round(100.0 * sum(CASE WHEN final_status = 'no_record' THEN 1 ELSE 0 END) / count(*), 1) / 100.0 AS no_record_pct
+FROM ${subscription_status}
+WHERE product_group LIKE '${inputs.group_filter.value}'
+  AND product_slug LIKE '${inputs.slug_filter.value}'
+  AND final_status != 'excluded_unreliable'
+GROUP BY 1
+ORDER BY 1
+```
+
+</Details>
+
+</Details>
 
 **On the full, unfiltered dataset: the cancel rate roughly doubles right when the no-record rate collapses — that's the tracking-gap fix becoming visible, not a real behavior change.**
 
