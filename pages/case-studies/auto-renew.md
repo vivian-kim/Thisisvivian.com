@@ -3,7 +3,7 @@ title: Auto-Renew Dynamics Analysis
 queries:
   - subscriptions.sql
   - subscription_status.sql
-  - auto_renew/outcome_overall.sql
+  - auto_renew/outcome_overall_by_plan.sql
   - auto_renew/revenue_by_outcome.sql
   - auto_renew/revenue_cancelled_vs_rest.sql
   - auto_renew/outcome_by_product.sql
@@ -175,7 +175,7 @@ Every subscription lands in exactly one of the three main outcome segments, plus
 
 </Details>
 
-**Filter the Overall, Product, Price, and Gateway charts below by plan length.** This is the single factor that changes almost every finding in this report, so it's worth exploring interactively rather than only as static tables:
+**Filter the Product, Price, and Gateway charts below by plan length.** This is the single factor that changes almost every finding in this report, so it's worth exploring interactively rather than only as static tables. (The Overall chart directly below shows both plan lengths at once, so it isn't affected by this dropdown.)
 
 <Dropdown name=plan_filter>
     <DropdownOption value="%" valueLabel="All plans"/>
@@ -185,20 +185,22 @@ Every subscription lands in exactly one of the three main outcome segments, plus
 
 ## Overall
 
+Split by plan length directly (stacked bars), so this doesn't depend on the dropdown filter above.
+
 <BarChart
-    data={auto_renew_outcome_overall}
+    data={auto_renew_outcome_overall_by_plan}
     x=outcome
     y=subscriptions
-    y2SeriesType=line
-    y2=pct
-    y2Fmt=pct1
+    series=plan
+    type=stacked
     labels=true
     labelPosition=center
     chartAreaHeight=300
 />
 
-<DataTable data={auto_renew_outcome_overall}>
+<DataTable data={auto_renew_outcome_overall_by_plan}>
   <Column id=outcome />
+  <Column id=plan title="Plan" />
   <Column id=subscriptions />
   <Column id=pct fmt=pct1 title="% of total" />
 </DataTable>
@@ -213,11 +215,13 @@ SELECT
     WHEN 'no_record' THEN 'No record'
   END AS outcome,
   final_status,
+  period_months::int || ' month' AS plan,
+  period_months,
   count(*) AS subscriptions,
   round(100.0 * count(*) / sum(count(*)) OVER (), 1) / 100.0 AS pct
 FROM ${subscription_status}
-WHERE period_months::varchar LIKE '${inputs.plan_filter.value}'
-GROUP BY 1, 2
+WHERE final_status != 'excluded_unreliable'
+GROUP BY 1, 2, 3, 4
 ORDER BY subscriptions DESC
 ```
 
