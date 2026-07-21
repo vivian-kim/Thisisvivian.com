@@ -6,7 +6,7 @@ SELECT
   END AS outcome,
   final_status,
   count(*) AS subscriptions,
-  round(sum(billings_eur_excl_vat), 2) AS revenue_eur
+  round(sum(billings_eur_excl_vat)) AS revenue_eur
 FROM ${subscription_status}
 WHERE final_status != 'excluded_unreliable'
 GROUP BY 1, 2

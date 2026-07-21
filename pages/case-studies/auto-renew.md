@@ -4,6 +4,7 @@ queries:
   - subscriptions.sql
   - subscription_status.sql
   - auto_renew/outcome_overall_by_plan.sql
+  - auto_renew/outcome_overall_by_plan_wide.sql
   - auto_renew/revenue_by_outcome.sql
   - auto_renew/revenue_cancelled_vs_rest.sql
   - auto_renew/outcome_by_product.sql
@@ -175,13 +176,7 @@ Every subscription lands in exactly one of the three main outcome segments, plus
 
 </Details>
 
-**Filter the Product, Price, and Gateway charts below by plan length.** This is the single factor that changes almost every finding in this report, so it's worth exploring interactively rather than only as static tables. (The Overall chart directly below shows both plan lengths at once, so it isn't affected by this dropdown.)
-
-<Dropdown name=plan_filter>
-    <DropdownOption value="%" valueLabel="All plans"/>
-    <DropdownOption value="1" valueLabel="1-month only"/>
-    <DropdownOption value="12" valueLabel="12-month only"/>
-</Dropdown>
+Plan length is the single factor that changes almost every finding in this report, so several charts below let you filter by it directly, right where each one appears.
 
 ## Overall
 
@@ -198,31 +193,34 @@ Split by plan length directly (stacked bars), so this doesn't depend on the drop
     chartAreaHeight=300
 />
 
-<DataTable data={auto_renew_outcome_overall_by_plan}>
-  <Column id=outcome />
+<DataTable data={auto_renew_outcome_overall_by_plan_wide}>
   <Column id=plan title="Plan" />
-  <Column id=subscriptions />
-  <Column id=pct fmt=pct1 title="% of total" />
+  <Column id=subscriptions title="Total" />
+  <Column id=stayed_n title="Stayed enabled" />
+  <Column id=stayed_pct fmt=pct1 title="Stayed %" />
+  <Column id=cancelled_n title="Cancelled" />
+  <Column id=cancelled_pct fmt=pct1 title="Cancelled %" />
+  <Column id=no_record_n title="No record" />
+  <Column id=no_record_pct fmt=pct1 title="No record %" />
 </DataTable>
 
 <Details title="SQL query used for Overall">
 
 ```sql
 SELECT
-  CASE final_status
-    WHEN 'stayed_enabled' THEN 'Stayed enabled'
-    WHEN 'disabled_before_expiry' THEN 'Actively cancelled'
-    WHEN 'no_record' THEN 'No record'
-  END AS outcome,
-  final_status,
   period_months::int || ' month' AS plan,
   period_months,
   count(*) AS subscriptions,
-  round(100.0 * count(*) / sum(count(*)) OVER (), 1) / 100.0 AS pct
+  sum(CASE WHEN final_status = 'stayed_enabled' THEN 1 ELSE 0 END) AS stayed_n,
+  round(100.0 * sum(CASE WHEN final_status = 'stayed_enabled' THEN 1 ELSE 0 END) / count(*), 1) / 100.0 AS stayed_pct,
+  sum(CASE WHEN final_status = 'disabled_before_expiry' THEN 1 ELSE 0 END) AS cancelled_n,
+  round(100.0 * sum(CASE WHEN final_status = 'disabled_before_expiry' THEN 1 ELSE 0 END) / count(*), 1) / 100.0 AS cancelled_pct,
+  sum(CASE WHEN final_status = 'no_record' THEN 1 ELSE 0 END) AS no_record_n,
+  round(100.0 * sum(CASE WHEN final_status = 'no_record' THEN 1 ELSE 0 END) / count(*), 1) / 100.0 AS no_record_pct
 FROM ${subscription_status}
 WHERE final_status != 'excluded_unreliable'
-GROUP BY 1, 2, 3, 4
-ORDER BY subscriptions DESC
+GROUP BY 1, 2
+ORDER BY period_months DESC
 ```
 
 </Details>
@@ -254,7 +252,7 @@ Active cancellation and staying enabled are almost tied as the two largest outco
 ```sql
 SELECT
   CASE WHEN final_status = 'disabled_before_expiry' THEN '1. Lost to cancellation' ELSE '2. Not lost (stayed enabled + no record)' END AS bucket,
-  round(sum(billings_eur_excl_vat), 2) AS revenue_eur,
+  round(sum(billings_eur_excl_vat)) AS revenue_eur,
   round(100.0 * sum(billings_eur_excl_vat) / sum(sum(billings_eur_excl_vat)) OVER (), 1) / 100.0 AS pct_of_total
 FROM ${subscription_status}
 WHERE final_status != 'excluded_unreliable'
@@ -287,7 +285,7 @@ SELECT
   END AS outcome,
   final_status,
   count(*) AS subscriptions,
-  round(sum(billings_eur_excl_vat), 2) AS revenue_eur
+  round(sum(billings_eur_excl_vat)) AS revenue_eur
 FROM ${subscription_status}
 WHERE final_status != 'excluded_unreliable'
 GROUP BY 1, 2
@@ -359,6 +357,12 @@ Cancel *rate* by product, plan length, price, and payment method: supporting det
 
 ## By Product Group
 
+<Dropdown name=product_plan_filter>
+    <DropdownOption value="%" valueLabel="All plans"/>
+    <DropdownOption value="1" valueLabel="1-month only"/>
+    <DropdownOption value="12" valueLabel="12-month only"/>
+</Dropdown>
+
 <Heatmap
     data={auto_renew_outcome_by_product}
     x=product_group
@@ -387,7 +391,7 @@ SELECT
   round(100.0 * sum(CASE WHEN final_status = 'no_record' THEN 1 ELSE 0 END) / count(*), 1) / 100.0 AS no_record_pct,
   round(median(billings_eur_excl_vat), 2) AS median_price
 FROM ${subscription_status}
-WHERE period_months::varchar LIKE '${inputs.plan_filter.value}' AND final_status != 'excluded_unreliable'
+WHERE period_months::varchar LIKE '${inputs.product_plan_filter.value}' AND final_status != 'excluded_unreliable'
 GROUP BY 1
 ORDER BY subscriptions DESC
 ```
@@ -551,6 +555,12 @@ Boundaries were checked against the real data before picking them. 95.4% of subs
 
 </Details>
 
+<Dropdown name=price_plan_filter>
+    <DropdownOption value="%" valueLabel="All plans"/>
+    <DropdownOption value="1" valueLabel="1-month only"/>
+    <DropdownOption value="12" valueLabel="12-month only"/>
+</Dropdown>
+
 <Heatmap
     data={auto_renew_outcome_by_price}
     x=price_bucket
@@ -583,7 +593,7 @@ SELECT
   round(100.0 * sum(CASE WHEN final_status = 'disabled_before_expiry' THEN 1 ELSE 0 END) / count(*), 1) / 100.0 AS cancelled_pct,
   round(100.0 * sum(CASE WHEN final_status = 'no_record' THEN 1 ELSE 0 END) / count(*), 1) / 100.0 AS no_record_pct
 FROM ${subscription_status}
-WHERE period_months::varchar LIKE '${inputs.plan_filter.value}' AND final_status != 'excluded_unreliable'
+WHERE period_months::varchar LIKE '${inputs.price_plan_filter.value}' AND final_status != 'excluded_unreliable'
 GROUP BY 1
 ORDER BY price_bucket
 ```
@@ -601,6 +611,12 @@ The €20+ bucket (max price €109.41) isn't being inflated by a few extreme ou
 ## By Payment Gateway Type
 
 Card/bank and crypto alone don't cover 100% of subscriptions: they're 85.1% of the 34,411 total. The remaining ~15% splits into two distinct groups, shown below rather than left out.
+
+<Dropdown name=gateway_plan_filter>
+    <DropdownOption value="%" valueLabel="All plans"/>
+    <DropdownOption value="1" valueLabel="1-month only"/>
+    <DropdownOption value="12" valueLabel="12-month only"/>
+</Dropdown>
 
 <Heatmap
     data={auto_renew_outcome_by_payment_gateway}
@@ -633,7 +649,7 @@ SELECT
   round(100.0 * sum(CASE WHEN final_status = 'disabled_before_expiry' THEN 1 ELSE 0 END) / count(*), 1) / 100.0 AS cancelled_pct,
   round(100.0 * sum(CASE WHEN final_status = 'no_record' THEN 1 ELSE 0 END) / count(*), 1) / 100.0 AS no_record_pct
 FROM ${subscription_status}
-WHERE period_months::varchar LIKE '${inputs.plan_filter.value}' AND final_status != 'excluded_unreliable'
+WHERE period_months::varchar LIKE '${inputs.gateway_plan_filter.value}' AND final_status != 'excluded_unreliable'
 GROUP BY 1
 ORDER BY gateway_type
 ```
