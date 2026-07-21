@@ -395,7 +395,7 @@ ORDER BY subscriptions DESC
 
 For `domain:.es` specifically, no-record sits at 50.6% for subscriptions purchased before March 2022, vs. 9.2% after. That's an 82% relative drop. The tracking gap is real and large. Mail's smaller sample makes it a lead rather than a settled finding.
 
-Price is shown as median, not average. Domain's average price (€0.79) is nearly 3x its median (€0.27). A handful of pricier TLDs pull the average up. Median better represents what a typical customer actually pays. Average is shown elsewhere only where the total matters more than the typical case.
+Price is shown as median, not average. Domain's average price (€0.79) is nearly 3x its median (€0.27). A handful of pricier TLDs (domain extensions) pull the average up. Median better represents what a typical customer actually pays. Average is shown elsewhere only where the total matters more than the typical case.
 
 </Details>
 
@@ -482,7 +482,7 @@ ORDER BY subscriptions DESC
 
 </Details>
 
-**`.shop` actively cancels at 55.9%**, worse than any other segment in this entire report. Mostly the price story wearing a TLD costume, but still worth surfacing by name since TLD is something a pricing or promo team can act on directly.
+**`.shop` actively cancels at 55.9%**, worse than any other segment in this entire report. Mostly the price story wearing a TLD costume, but still worth surfacing by name since it's something a pricing or promo team can act on directly.
 
 <Details title="Why .shop specifically, and what's driving it">
 
@@ -761,7 +761,9 @@ These customers already showed intent to cancel once, then changed their mind. 1
 
 # Seasonality
 
-For 12-month plans, the renewal date falls in the same calendar month as the original purchase, a year later; for 1-month plans it's simply the following month. Switch between them below: the two plan lengths have different volumes and different patterns, so they're shown one at a time rather than blended. Full dataset, all three outcomes, no date filter applied. This is the same cohort view as below, grouped by renewal month instead of signup month.
+For 12-month plans, the renewal date falls in the same calendar month as the original purchase, a year later. For 1-month plans it's simply the following month. Switch between them below. The two plan lengths have different volumes and different patterns, so they're shown one at a time rather than blended. Full dataset, all three outcomes, no date filter applied.
+
+This is the same one-outcome-per-subscription view as the Signup Cohorts section further down, with one difference: here every year is collapsed into a single Jan-Dec calendar, keyed to when the term ends, to isolate a repeating seasonal pattern. That section keeps the raw month-by-month timeline instead.
 
 **Each bar is a sum across every year in the dataset (renewal dates span 2021-2023), not a single year's volume**, so a one-off spike in any single year doesn't get mistaken for a real seasonal pattern.
 
@@ -773,10 +775,10 @@ For 12-month plans, the renewal date falls in the same calendar month as the ori
 <BarChart
     data={auto_renew_seasonality_by_renewal_month}
     x=renewal_month
-    y=term_end_subscriptions
+    y=cancelled_pct
+    yFmt=pct1
+    y2=term_end_subscriptions
     y2SeriesType=line
-    y2=cancelled_pct
-    y2Fmt=pct1
     sort=false
     labels=true
     labelPosition=center
@@ -822,14 +824,14 @@ On the 1-month view, November sits at 58.7% stayed. That's unremarkable, near th
 
 # Signup Cohorts: Outcome Over Time
 
-**A signup cohort here is every subscription that started in the same calendar month, tracked to its final outcome (stayed enabled / actively cancelled / no record) by the end of that subscription's own term.** It's not a multi-year retention curve (this dataset has no customer ID to follow the same person across renewal cycles; see Appendix); it's a same-term, one-outcome-per-subscription view, just grouped by the month people signed up instead of the month their term ended.
+**A signup cohort here is every subscription that started in the same calendar month, tracked to its final outcome (stayed enabled / actively cancelled / no record) by the end of that subscription's own term.** It's not a multi-year retention curve. This dataset has no customer ID to follow the same person across renewal cycles (see Appendix). It's a same-term, one-outcome-per-subscription view, shown on the raw month-by-month timeline and grouped by when people signed up.
 
 **On the full, unfiltered dataset: the cancel rate roughly doubles right when the no-record rate collapses (March 2022). That's a tracking-gap fix becoming visible, not a real behaviour change.** Use the dropdowns below to check whether that holds for a specific product or TLD.
 
 <Details title="How to use this view, and how it differs from Seasonality above">
 
 1. Pick a product group from the first dropdown.
-2. Optionally narrow to a specific slug in the second dropdown (e.g. a single domain TLD).
+2. Optionally narrow to a specific slug in the second dropdown (e.g. a single TLD like `.shop`).
 3. Watch how that signup-month cohort's outcomes trend over time.
 
 **How this differs from Seasonality above:** Seasonality collapses every year into one Jan-Dec pattern to isolate a *repeating* calendar effect. This view is the raw chronological timeline (actual year-month) for a specific product, with no year-collapsing.
@@ -844,17 +846,19 @@ On the 1-month view, November sits at 58.7% stayed. That's unremarkable, near th
     <DropdownOption value="%" valueLabel="All slugs in this group"/>
 </Dropdown>
 
-<LineChart
+*Small segments will look jumpy month to month. Percentages on a handful of subscriptions aren't meaningful.*
+
+<AreaChart
     data={auto_renew_outcome_timeseries}
     x=month
     y=pct
     yFmt=pct1
     series=outcome
-    labels=true
-    labelPosition=top
-    labelFmt=pct1
+    type=stacked100
     chartAreaHeight=350
-/>
+>
+    <ReferenceLine x='2022-03-01' label="Tracking fix visible" hideValue=true/>
+</AreaChart>
 
 <Details title="Same data as a cancellation-rate trend against total volume, plus the exact per-outcome % for every month">
 
@@ -1070,21 +1074,21 @@ Excluding these 20 records (0.058% of 34,411) doesn't change any headline percen
 
 # Recommendations
 
-1. **Build a save flow for the 15-30 day pre-renewal window, targeted at 12-month `hosting:hostinger_premium` customers specifically.** The single biggest lever by both count and revenue.
+1. **Target annual `hosting:hostinger_premium` customers with a save offer 15-30 days before renewal.** The single biggest lever by both count and revenue.
 
    <Details title="Why">
 
    - **How many cancel:** 39.1% of annual subscriptions actively cancel, over half of those within the final 30 days before renewal.
-   - **This holds even more strongly for the target product:** 65.4% of `hostinger_premium` annual cancellations fall within 30 days of renewal, vs. 41.9% for all other products.
+   - **The cliff is sharper for `hostinger_premium` specifically:** 65.4% of its annual cancellations fall within 30 days of renewal, vs. 41.9% for all other products.
    - **Where the money is:** `hosting:hostinger_premium` alone accounts for 85.2% of all cancelled revenue (€38,998), far more than its cancel rate alone would suggest.
    - **The size of the opportunity (no recovery rate has actually been measured yet):** €28,054 in current-term revenue sits in that 30-day pre-renewal window, across all products. An illustrative 10% recovery is ~€2,800/year retained; 5% is ~€1,400, 20% is ~€5,600. Don't plan around any single number here; pilot the save flow first, measure the real rate, then re-run this math.
 
    </Details>
 
-2. **Soften the annual renewal "sticker shock."** Four concrete tactics, in order of how directly they address the trigger:
+2. **Make the annual renewal charge less jarring.** Four tactics, ordered by how directly they address the trigger:
 
    - **"Decoupled" billing:** charge monthly amounts, but frame it as "your annual plan, billed monthly." This keeps the annual discount and commitment psychology without the customer ever seeing one large number, basically the gym/insurance model.
-   - **A value recap, not just a reminder.** A bare "your card will be charged €X on [date]" notice may itself be part of the trigger, not just a warning about it. Pair it with a personalized "here's what you got this year" (usage stats, milestones, savings vs. monthly pricing) so the renewal notification arrives with justification attached, not just a bill.
+   - **A value recap, not just a reminder.** A bare "your card will be charged €X on [date]" notice may itself be part of the trigger, not just a warning about it. Pair it with a personalised "here's what you got this year" (usage stats, milestones, savings vs. monthly pricing) so the renewal notification arrives with justification attached, not just a bill.
    - **Time it 45-60 days out**, before the 30-day cancellation cluster starts, so it reframes the decision before the sticker-shock reflex kicks in, rather than triggering it.
    - **Offer a pause, not just cancel-or-keep.** A middle option may capture customers who'd cancel outright when the only choice is binary.
 
