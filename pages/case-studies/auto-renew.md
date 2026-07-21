@@ -348,7 +348,9 @@ ORDER BY cancelled_revenue DESC
 
 </Details>
 
-<Details title="Segment Deep-Dive: Product, Plan, Price, Payment">
+## Segment Deep-Dive: Product, Plan, Price, Payment
+
+<Details title="Click to expand: Product, Plan, Price, Payment breakdowns">
 
 Cancel *rate* by product, plan length, price, and payment method: supporting detail behind the Overall and Revenue Lost to Cancellation charts above. Worth reading if you want to know *where* the cancellations concentrate, not just how many there are.
 
@@ -848,17 +850,19 @@ On the 1-month view, November sits at 58.7% stayed. That's unremarkable, near th
 
 *Small segments will look jumpy month to month. Percentages on a handful of subscriptions aren't meaningful.*
 
-<AreaChart
+<LineChart
     data={auto_renew_outcome_timeseries}
     x=month
     y=pct
     yFmt=pct1
     series=outcome
-    type=stacked100
+    labels=true
+    labelPosition=top
+    labelFmt=pct1
     chartAreaHeight=350
 >
     <ReferenceLine x='2022-03-01' label="Tracking fix visible" hideValue=true/>
-</AreaChart>
+</LineChart>
 
 <Details title="Same data as a cancellation-rate trend against total volume, plus the exact per-outcome % for every month">
 
