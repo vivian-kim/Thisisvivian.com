@@ -7,7 +7,8 @@ SELECT
     WHEN 'no_record' THEN 'No record'
   END AS outcome,
   final_status,
-  count(*) AS subscriptions
+  count(*) AS subscriptions,
+  round(100.0 * count(*) / sum(count(*)) OVER (PARTITION BY date_trunc('month', started_at)), 1) / 100.0 AS pct
 FROM ${subscription_status}
 WHERE product_group LIKE '${inputs.group_filter.value}'
   AND product_slug LIKE '${inputs.slug_filter.value}'
