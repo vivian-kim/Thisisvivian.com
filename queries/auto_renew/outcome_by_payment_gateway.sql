@@ -20,6 +20,6 @@ SELECT
       ELSE '4. Other'
     END), 1) / 100.0 AS pct
 FROM ${subscription_status}
-WHERE period_months::varchar LIKE '${inputs.gateway_plan_filter.value}' AND final_status != 'excluded_unreliable'
+WHERE final_status != 'excluded_unreliable'
 GROUP BY 1, 2, 3
 ORDER BY gateway_type, subscriptions DESC

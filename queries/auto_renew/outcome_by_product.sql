@@ -9,6 +9,6 @@ SELECT
   count(*) AS subscriptions,
   round(100.0 * count(*) / sum(count(*)) OVER (PARTITION BY product_group), 1) / 100.0 AS pct
 FROM ${subscription_status}
-WHERE period_months::varchar LIKE '${inputs.product_plan_filter.value}' AND final_status != 'excluded_unreliable'
+WHERE final_status != 'excluded_unreliable'
 GROUP BY 1, 2, 3
 ORDER BY product_group, subscriptions DESC

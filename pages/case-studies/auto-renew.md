@@ -176,11 +176,11 @@ Every subscription lands in exactly one of the three main outcome segments, plus
 
 </Details>
 
-Plan length is the single factor that changes almost every finding in this report, so several charts below let you filter by it directly, right where each one appears.
+Plan length is the single factor that changes almost every finding in this report. The By Plan Length section below breaks it out directly; the charts in between show all plans combined, since 93.5% of the dataset is 12-month plans anyway.
 
 ## Overall
 
-Split by plan length directly (stacked bars), so this doesn't depend on the dropdown filter above.
+Split by plan length directly, as a stacked bar.
 
 <BarChart
     data={auto_renew_outcome_overall_by_plan}
@@ -357,12 +357,6 @@ Cancel *rate* by product, plan length, price, and payment method: supporting det
 
 ## By Product Group
 
-<Dropdown name=product_plan_filter>
-    <DropdownOption value="%" valueLabel="All plans"/>
-    <DropdownOption value="1" valueLabel="1-month only"/>
-    <DropdownOption value="12" valueLabel="12-month only"/>
-</Dropdown>
-
 <Heatmap
     data={auto_renew_outcome_by_product}
     x=product_group
@@ -391,7 +385,7 @@ SELECT
   round(100.0 * sum(CASE WHEN final_status = 'no_record' THEN 1 ELSE 0 END) / count(*), 1) / 100.0 AS no_record_pct,
   round(median(billings_eur_excl_vat), 2) AS median_price
 FROM ${subscription_status}
-WHERE period_months::varchar LIKE '${inputs.product_plan_filter.value}' AND final_status != 'excluded_unreliable'
+WHERE final_status != 'excluded_unreliable'
 GROUP BY 1
 ORDER BY subscriptions DESC
 ```
@@ -555,12 +549,6 @@ Boundaries were checked against the real data before picking them. 95.4% of subs
 
 </Details>
 
-<Dropdown name=price_plan_filter>
-    <DropdownOption value="%" valueLabel="All plans"/>
-    <DropdownOption value="1" valueLabel="1-month only"/>
-    <DropdownOption value="12" valueLabel="12-month only"/>
-</Dropdown>
-
 <Heatmap
     data={auto_renew_outcome_by_price}
     x=price_bucket
@@ -593,7 +581,7 @@ SELECT
   round(100.0 * sum(CASE WHEN final_status = 'disabled_before_expiry' THEN 1 ELSE 0 END) / count(*), 1) / 100.0 AS cancelled_pct,
   round(100.0 * sum(CASE WHEN final_status = 'no_record' THEN 1 ELSE 0 END) / count(*), 1) / 100.0 AS no_record_pct
 FROM ${subscription_status}
-WHERE period_months::varchar LIKE '${inputs.price_plan_filter.value}' AND final_status != 'excluded_unreliable'
+WHERE final_status != 'excluded_unreliable'
 GROUP BY 1
 ORDER BY price_bucket
 ```
@@ -611,12 +599,6 @@ The €20+ bucket (max price €109.41) isn't being inflated by a few extreme ou
 ## By Payment Gateway Type
 
 Card/bank and crypto alone don't cover 100% of subscriptions: they're 85.1% of the 34,411 total. The remaining ~15% splits into two distinct groups, shown below rather than left out.
-
-<Dropdown name=gateway_plan_filter>
-    <DropdownOption value="%" valueLabel="All plans"/>
-    <DropdownOption value="1" valueLabel="1-month only"/>
-    <DropdownOption value="12" valueLabel="12-month only"/>
-</Dropdown>
 
 <Heatmap
     data={auto_renew_outcome_by_payment_gateway}
@@ -649,7 +631,7 @@ SELECT
   round(100.0 * sum(CASE WHEN final_status = 'disabled_before_expiry' THEN 1 ELSE 0 END) / count(*), 1) / 100.0 AS cancelled_pct,
   round(100.0 * sum(CASE WHEN final_status = 'no_record' THEN 1 ELSE 0 END) / count(*), 1) / 100.0 AS no_record_pct
 FROM ${subscription_status}
-WHERE period_months::varchar LIKE '${inputs.gateway_plan_filter.value}' AND final_status != 'excluded_unreliable'
+WHERE final_status != 'excluded_unreliable'
 GROUP BY 1
 ORDER BY gateway_type
 ```
