@@ -30,7 +30,7 @@ queries:
   - auto_renew/outcome_timeseries.sql
 ---
 
-A subscription-based hosting/domain provider needed to understand **when users tend to enable or disable their auto-renew**. The goal was to understand behavioural patterns and provide actionable insights and suggestions to improve the auto-renew rate, for non-technical stakeholders on the product team.
+A subscription-based hosting/domain provider needed to understand **when users tend to enable or disable their auto-renew**, and find actionable ways to improve the rate, for non-technical stakeholders on the product team.
 
 **In short:** most subscriptions aren't failing to activate auto-renew. They're usually default-activated, then actively cancelled later, usually right before the big annual charge would hit.
 
@@ -67,11 +67,11 @@ Key questions included:
 - Retention rises steadily with price, no reversals, from 33.0% (free) to 73.4% (€20+)
 
 ## Payment & Timing
-- Crypto-paid subscriptions almost never auto-renew (95.2% no record). We don't know why; a plausible assumption is a technical/platform constraint, but the data can't confirm that
-- November is both the highest-volume signup month and one of the worst-retaining. The Black Friday link is a plausible, timing-based inference, not confirmed by any promotional data
+- Crypto-paid subscriptions almost never auto-renew (95.2% no record), cause unknown; a plausible guess is a technical/platform constraint, unconfirmed
+- November is both the highest-volume signup month and one of the worst-retaining, plausibly tied to Black Friday, though unconfirmed by promotional data
 
 ## Product & Domain Detail
-- **Cloud hosting retains 19 points better than shared hosting** (64.2% vs. 45.4%), a concrete lever: push customers towards cloud. By median price (average is skewed by a few expensive outliers), cloud isn't actually pricier than shared, so price alone doesn't explain the gap
+- **Cloud hosting retains 19 points better than shared hosting** (64.2% vs. 45.4%), a concrete lever: push customers towards cloud. By median price, cloud isn't actually pricier than shared, so price alone doesn't explain the gap
 - **`.shop` is the single worst-performing segment in the entire report** (55.9% cancel): a steep first-year price followed by a 10-20x renewal jump, with signups concentrated near Black Friday. No promo data exists to confirm the cause
 - Domain, hosting, and mail all show meaningfully different "no record" rates (37.5% / 9.9% / 40.4%), worth checking against the tracking gap before treating as a behavioural finding
 
@@ -95,7 +95,7 @@ Key questions included:
 
 - **Stayed enabled:** auto-renew was on and still on when the term ended; the customer was set to renew.
 - **Actively cancelled:** auto-renew was turned on at some point, then turned off again before the term ended.
-- **No record:** we cannot say whether this subscription was ever auto-renewed or cancelled: `is_auto_renew` is blank, so no enable *or* disable event was ever logged. This is **not** a missing subscription: `started_at`/`ended_at` (the term itself) are always present, with zero nulls across the entire dataset. It's specifically `ar_valid_from`/`ar_valid_to` (the auto-renew on/off dates) that are missing. The auto-renew status is simply unobserved, not "cancelled," not "confirmed enabled." See Assumptions and Limitations in the Appendix for the two live theories on why.
+- **No record:** we cannot say whether this subscription was ever auto-renewed or cancelled: `is_auto_renew` is blank, so no enable *or* disable event was logged. Not a missing subscription: `started_at`/`ended_at` are always present, zero nulls. It's specifically `ar_valid_from`/`ar_valid_to` that's missing; status is simply unobserved, not "cancelled," not "confirmed enabled." See Assumptions and Limitations in the Appendix for the two live theories on why.
 - **Excluded (unreliable record):** a small group of 20 subscriptions with corrupted `ar_valid_from`/`ar_valid_to` dates (a logically impossible order, or a window that predates the subscription itself). Held out of every chart, table, and percentage in this report; see the Appendix for the full breakdown.
 - **`ar_valid_from` / `ar_valid_to`:** the raw column names for the date auto-renew was turned on / turned off, respectively. Dates only, no timestamps: anything that happens and reverses within the same day is invisible to this data.
 - **Renewal date:** the date a subscription's current term ends (`ended_at`): the point at which auto-renew would trigger the next charge, if it's on.
@@ -172,7 +172,7 @@ FROM no_record_rows
 
 <Details title="How this was checked">
 
-Every subscription lands in exactly one of the three main outcome segments, plus a 4th, tiny "excluded (unreliable record)" bucket held out of every chart in this report (34,411 = 12,876 + 12,570 + 8,945 + 20, checked against the raw file's unique subscription count). See the Appendix for what the 20 excluded records are and why.
+Every subscription lands in exactly one of the three outcome segments, plus a 4th, tiny "excluded (unreliable record)" bucket (34,411 = 12,876 + 12,570 + 8,945 + 20, checked against the raw file's unique subscription count). See the Appendix for the 20 excluded records.
 
 </Details>
 
@@ -264,7 +264,7 @@ ORDER BY bucket
 
 **€45,779 (40.6% of all revenue tracked) is tied to subscriptions that actively cancelled auto-renew.** Of that, €28,054 (6,689 subscriptions) sits in the highest-leverage window: 12-month plans cancelled within 30 days of renewal.
 
-**No save-flow has been tested, so there's no real recovery rate to cite. The numbers below are a rough sizing exercise.** At an illustrative (not measured) 10% recovery, that's roughly €2,800/year retained; at 5% it's ~€1,400, at 20% it's ~€5,600. Pin down the real number with an actual pilot before it shows up as a commitment in a planning doc.
+**No save-flow has been tested, so there's no real recovery rate to cite. The numbers below are a rough sizing exercise.** At an illustrative (not measured) 10% recovery, that's roughly €2,800/year retained; at 5% it's ~€1,400, at 20% it's ~€5,600. Pin down the real number with a pilot before it becomes a commitment in a planning doc.
 
 **Full breakdown, including the "everything else" split into its two parts:**
 
@@ -353,7 +353,7 @@ ORDER BY cancelled_revenue DESC
 
 <Details title="Click to expand: Product, Plan, Price, Payment breakdowns">
 
-Cancel *rate* by product, plan length, price, and payment method: supporting detail behind the Overall and Revenue Lost to Cancellation charts above. Worth reading if you want to know *where* the cancellations concentrate, not just how many there are.
+Cancel *rate* by product, plan length, price, and payment method, supporting detail behind the Overall and Revenue Lost charts above. Worth reading to see *where* cancellations concentrate, not just how many.
 
 ## By Product Group
 
@@ -398,7 +398,7 @@ ORDER BY subscriptions DESC
 
 For `domain:.es` specifically, no-record sits at 50.6% for subscriptions purchased before March 2022, vs. 9.2% after. That's an 82% relative drop. The tracking gap is real and large. Mail's smaller sample makes it a lead rather than a settled finding.
 
-Price is shown as median, not average. Domain's average price (€0.79) is nearly 3x its median (€0.27). A handful of pricier TLDs (domain extensions) pull the average up. Median better represents what a typical customer actually pays. Average is shown elsewhere only where the total matters more than the typical case.
+Price is shown as median, not average. Domain's average (€0.79) is nearly 3x its median (€0.27), pulled up by a handful of pricier TLDs (domain extensions). Median better reflects what a typical customer pays. Average is used elsewhere only where the total matters more than the typical case.
 
 </Details>
 
@@ -445,7 +445,7 @@ ORDER BY subscriptions DESC
 
 <Details title="Why we don't think this is just a price effect">
 
-Using *average* price, cloud looked far pricier than shared (€18.36 vs. €6.36). That suggested the retention gap might just be the price story again. But cloud's *median* price is actually €4.80, slightly *below* shared's €5.73. A handful of very expensive cloud plans distort the average. On the typical-customer price, cloud is not more expensive, yet it still retains 19 points better. That weakens the "it's just price" explanation.
+Using *average* price, cloud looked far pricier than shared (€18.36 vs. €6.36), suggesting the retention gap might just be price again. But cloud's *median* price is €4.80, slightly *below* shared's €5.73, since a handful of very expensive plans distort the average. On the typical-customer price, cloud isn't more expensive, yet still retains 19 points better. That weakens the "it's just price" explanation.
 
 **Plausible reasons instead, though none can be fully verified from this data:**
 - **Customer type likely differs.** Cloud hosting is typically bought by developers, agencies, or businesses running something with a real operational dependency. That's a stickier customer than someone testing a hobby project.
@@ -495,7 +495,7 @@ Two things line up for `.shop` specifically:
 - **Seasonal concentration.** 218 of 410 signups (53.2%) landed in Aug-Nov 2022, peaking at 67 in November. That's the same Black Friday window flagged as weak elsewhere in this report. No campaign data exists to confirm why, but the overlap is real.
 - **A first-year price cliff.** 395 of 410 subscriptions (96.3%) cluster at €0-0.76. A separate group of 15 sits at €5.55-7.99, roughly a 10-20x jump at renewal. `.es`, a better-retaining TLD, sits in a narrow band around €1.7 with no cliff.
 
-Put together, `.shop` looks like a steep first-year price, Black Friday-adjacent signups, and a renewal charge many times the original. It's a sharper, TLD-specific version of the renewal-charge cluster documented for annual plans generally. But this is inferred from prices and dates alone. There's no promo flag or list-price field to confirm whether it was an actual promotion, a standard intro rate, or something else.
+Put together, `.shop` looks like a steep first-year price, Black Friday-adjacent signups, and a renewal charge many times the original, a sharper, TLD-specific version of the renewal-charge cluster documented for annual plans generally. But this is inferred from prices and dates alone. No promo flag or list-price field confirms whether it was an actual promotion, a standard intro rate, or something else.
 
 Mail was checked for sub-segments too, for consistency. It has none. One `product_sub_group`, one `product_slug` (`hostinger_mail:pro`).
 
@@ -539,7 +539,7 @@ ORDER BY period_months
 
 </Details>
 
-**Annual plans activate auto-renew about as reliably as monthly plans but get cancelled at 2.79x the rate afterward.** Since 93.5% of the full dataset is 12-month plans, this single pattern describes what happens to the overwhelming majority of the customer base. The large upfront lump-sum renewal charge is the strongest candidate trigger, exact mechanism unconfirmed.
+**Annual plans activate auto-renew about as reliably as monthly plans but get cancelled at 2.79x the rate afterward.** Since 93.5% of the dataset is 12-month plans, this pattern describes most of the customer base. The large upfront lump-sum renewal charge is the strongest candidate trigger, exact mechanism unconfirmed.
 
 ## By Price Range
 
@@ -642,7 +642,7 @@ ORDER BY gateway_type
 
 <Details title="One assumption worth testing">
 
-Crypto payments generally can't be stored for automatic re-billing the way a card can. That would make this a platform constraint rather than a behavioural signal. But that's a guess, not a finding. "No gateway on file" (14.6% of subscriptions) has a meaningfully elevated no-record rate too, and the same caveat applies.
+Crypto payments generally can't be stored for automatic re-billing like a card. That could be a platform constraint rather than a behavioural signal, but it's a guess, not a finding. "No gateway on file" (14.6% of subscriptions) has an elevated no-record rate too, same caveat.
 
 </Details>
 
@@ -656,7 +656,7 @@ Split by plan length, since "days before renewal" means very different things fo
 
 **1-month plans** (n=316; excludes 3 subscriptions with a data error; see Appendix)
 
-<BarChart data={auto_renew_cancellation_timing_1mo_plans} x=bucket y=n sort=false labels=true labelPosition=center chartAreaHeight=250 />
+<BarChart data={auto_renew_cancellation_timing_1mo_plans} x=bucket y=pct yFmt=pct1 sort=false labels=true labelPosition=center labelFmt=pct1 chartAreaHeight=250 />
 
 <Details title="SQL query used for 1-month timing">
 
@@ -670,7 +670,7 @@ SELECT
   END AS bucket,
   min(days_before_expiry_disabled) AS sort_key,
   count(*) AS n,
-  round(100.0 * count(*) / sum(count(*)) OVER (), 1) AS pct
+  round(100.0 * count(*) / sum(count(*)) OVER (), 1) / 100.0 AS pct
 FROM ${subscription_status}
 WHERE final_status = 'disabled_before_expiry' AND is_clean_window AND period_months = 1
 GROUP BY 1
@@ -679,11 +679,11 @@ ORDER BY sort_key
 
 </Details>
 
-These 4 buckets cover the entire possible range (0-30 days) and sum to 100%: every 1-month cancellation is trivially "within 30 days," since the whole term only lasts 30 days. So "within 30 days" doesn't mean anything for monthly plans. (Mean 14.3 days, median 16.0 days on before cancelling, roughly the halfway point of the term.)
+These 4 buckets cover the full range (0-30 days) and sum to 100%. Every 1-month cancellation is trivially "within 30 days," since the whole term only lasts 30 days, so that framing doesn't mean anything for monthly plans. (Mean 14.3 days, median 16.0, roughly the halfway point of the term.)
 
 **12-month plans** (n=12,560)
 
-<BarChart data={auto_renew_cancellation_timing_12mo_plans} x=bucket y=n sort=false labels=true labelPosition=center chartAreaHeight=250 />
+<BarChart data={auto_renew_cancellation_timing_12mo_plans} x=bucket y=pct yFmt=pct1 sort=false labels=true labelPosition=center labelFmt=pct1 chartAreaHeight=250 />
 
 <Details title="SQL query used for 12-month timing">
 
@@ -698,7 +698,7 @@ SELECT
   END AS bucket,
   min(days_before_expiry_disabled) AS sort_key,
   count(*) AS n,
-  round(100.0 * count(*) / sum(count(*)) OVER (), 1) AS pct
+  round(100.0 * count(*) / sum(count(*)) OVER (), 1) / 100.0 AS pct
 FROM ${subscription_status}
 WHERE final_status = 'disabled_before_expiry' AND is_clean_window AND period_months = 12
 GROUP BY 1
@@ -713,7 +713,7 @@ ORDER BY sort_key
 
 # Returning Customers: Turned Auto-Renew Off, Then Back On
 
-365 of 34,411 subscriptions (1.1%) turned auto-renew off, then back on again, at least once during their term. Everything above uses only their *most recent* window, discarding this history. Looked at on its own (361 of the 365; 4 have their most recent window among the 20 excluded-unreliable records from the Appendix, so they're left out of the outcome split below, same as everywhere else in this report):
+365 of 34,411 subscriptions (1.1%) turned auto-renew off, then back on again, at least once during their term. Everything above uses only their *most recent* window, discarding this history. Looked at on its own (361 of the 365; 4 fall among the 20 excluded-unreliable records from the Appendix, left out here too, same as elsewhere):
 
 <Heatmap
     data={auto_renew_returning_customers_outcome}
@@ -746,7 +746,7 @@ ORDER BY grp
 
 </Details>
 
-**Customers who turn auto-renew off and then back on end up far more likely to stay enabled (68.1%) than everyone else (49.1%)**, a strong signal that re-engagement works, and worth understanding since it may be a cheap, repeatable save tactic.
+**Customers who turn auto-renew off and then back on end up far more likely to stay enabled (68.1%) than everyone else (49.1%)**, a strong signal re-engagement works, and worth pursuing as a cheap, repeatable save tactic.
 
 <Details title="Supporting detail">
 
@@ -756,7 +756,7 @@ These customers already showed intent to cancel once, then changed their mind. 1
 
 **They skew slightly cheaper.** Median price for returners is €1.71, vs. €2.62 for everyone else. Lower-stakes plans are easier to flip back on.
 
-**Timing varies widely.** Median 53 days between turning it off and back on (mean 104.4 days, pulled up by a long tail, range 2-368). Half come back within under two months. But there's no tight, predictable window to design a save-flow trigger around.
+**Timing varies widely.** Median 53 days between turning it off and back on (mean 104.4 days, pulled up by a long tail, range 2-368). Half come back within two months, but there's no tight, predictable window for a save-flow trigger.
 
 </Details>
 
@@ -764,11 +764,7 @@ These customers already showed intent to cancel once, then changed their mind. 1
 
 # Seasonality
 
-For 12-month plans, the renewal date falls in the same calendar month as the original purchase, a year later. For 1-month plans it's simply the following month. Switch between them below. The two plan lengths have different volumes and different patterns, so they're shown one at a time rather than blended. Full dataset, all three outcomes, no date filter applied.
-
-This is the same one-outcome-per-subscription view as the Signup Cohorts section further down, with one difference: here every year is collapsed into a single Jan-Dec calendar, keyed to when the term ends, to isolate a repeating seasonal pattern. That section keeps the raw month-by-month timeline instead.
-
-**Each bar is a sum across every year in the dataset (renewal dates span 2021-2023), not a single year's volume**, so a one-off spike in any single year doesn't get mistaken for a real seasonal pattern.
+**Renewal month, summed across every year (2021-2023) to isolate a repeating calendar pattern, not a one-off spike.** For 12-month plans that's the same calendar month as signup, a year later; for 1-month plans, the following month. Switch plan length below, since the two have different volumes and patterns. (Signup Cohorts below shows the same outcomes on the raw timeline instead, not collapsed by year.)
 
 <Dropdown name=seasonality_plan>
     <DropdownOption value="12" valueLabel="12-month plans"/>
@@ -817,9 +813,11 @@ ORDER BY 1
 
 <Details title="Supporting detail, both views">
 
-On the 12-month view (the default above), November is both the highest-volume renewal month (4,158) and one of the worst-retaining (30.6% stayed, 46.1% cancelled). That's plausibly tied to Black Friday driving price-sensitive signups. January and February stand out for a different reason. Their no-record rates sit at 38.1% and 34.7%, well above every other month (15-29% elsewhere). Check that against the tracking-gap timing before reading it as a real January/February effect, since these two months draw more heavily from the earlier, less-reliable cohort.
+On the 12-month view (the default above), November is both the highest-volume renewal month (4,158) and one of the worst-retaining (30.6% stayed, 46.1% cancelled), plausibly tied to Black Friday driving price-sensitive signups.
 
-On the 1-month view, November sits at 58.7% stayed. That's unremarkable, near the middle of the range (42.5-65.3% across all 12 months). December is the standout month for 1-month plans instead. It has the highest volume (267) and, alongside January and February, one of three elevated no-record rates (34.8% / 33.6% / 41.1%), consistent with the same tracking-gap pattern seen in the 12-month view.
+January and February stand out too. Their no-record rates sit at 38.1% and 34.7%, well above every other month (15-29% elsewhere), though that may just reflect these months drawing more from the earlier, less-reliable cohort.
+
+On the 1-month view, November sits at 58.7% stayed, unremarkable, near the middle of the range (42.5-65.3% across all 12 months). December stands out instead, with the highest volume (267) and, alongside January and February, one of three elevated no-record rates (34.8% / 33.6% / 41.1%), consistent with the tracking-gap pattern seen in the 12-month view.
 
 </Details>
 
@@ -827,17 +825,15 @@ On the 1-month view, November sits at 58.7% stayed. That's unremarkable, near th
 
 # Signup Cohorts: Outcome Over Time
 
-**A signup cohort here is every subscription that started in the same calendar month, tracked to its final outcome (stayed enabled / actively cancelled / no record) by the end of that subscription's own term.** It's not a multi-year retention curve. This dataset has no customer ID to follow the same person across renewal cycles (see Appendix). It's a same-term, one-outcome-per-subscription view, shown on the raw month-by-month timeline and grouped by when people signed up.
+**A signup cohort here is every subscription that started in the same calendar month, tracked to its final outcome (stayed enabled / actively cancelled / no record) by the end of that subscription's own term.**
+
+It's not a multi-year retention curve, since this dataset has no customer ID to follow the same person across renewal cycles (see Appendix). It's a same-term view, shown on the raw month-by-month timeline and grouped by signup month.
 
 **On the full, unfiltered dataset: the cancel rate roughly doubles right when the no-record rate collapses (March 2022). That's a tracking-gap fix becoming visible, not a real behaviour change.** Use the dropdowns below to check whether that holds for a specific product or TLD.
 
 <Details title="How to use this view, and how it differs from Seasonality above">
 
-1. Pick a product group from the first dropdown.
-2. Optionally narrow to a specific slug in the second dropdown (e.g. a single TLD like `.shop`).
-3. Watch how that signup-month cohort's outcomes trend over time.
-
-**How this differs from Seasonality above:** Seasonality collapses every year into one Jan-Dec pattern to isolate a *repeating* calendar effect. This view is the raw chronological timeline (actual year-month) for a specific product, with no year-collapsing.
+Pick a product group, optionally narrow to a specific TLD or slug (e.g. `.shop`), and watch that cohort's outcomes trend over time. Unlike Seasonality above, years aren't collapsed here — this is the raw timeline for a specific product.
 
 </Details>
 
@@ -867,11 +863,13 @@ On the 1-month view, November sits at 58.7% stayed. That's unremarkable, near th
 
 <Details title="What the month-by-month numbers show">
 
-No-record spikes as high as 68% (June 2021) and stays elevated through February 2022. Then it drops sharply to a stable 11-16% from March 2022 onward, matching the tracking-gap cutoff used throughout this report. As no-record falls, cancelled % rises in near lock-step, from the 20-30% range pre-2022 to 37-56% from March 2022 on. The most likely read is that many pre-March-2022 "no record" subscriptions were real cancellations that just weren't logged. Once tracking improved, the true cancel rate became visible, not higher.
+No-record spikes as high as 68% (June 2021), stays elevated through February 2022, then drops sharply to a stable 11-16% from March 2022 on, matching the tracking-gap cutoff used throughout this report.
 
-One nuance worth flagging. The gap isn't uniform across "before March 2022." January-April 2021 actually shows a *lower* no-record rate (21-28%) than May 2021-February 2022 (38-68%). The tracking problem has a specific onset around May 2021, not from the start of the dataset. That's worth mentioning if the data team tries to pin down exactly when the logging issue began.
+As no-record falls, cancelled % rises in near lock-step, from 20-30% pre-2022 to 37-56% after. Most likely, many pre-March-2022 "no record" subscriptions were real cancellations that just weren't logged, and once tracking improved, the true cancel rate became visible, not higher.
 
-Volume also grows over the period, from roughly 700-900/month in early-mid 2021 to 1,500-2,700/month by late 2022. There's a visible spike every November in both years, consistent with the Black Friday pattern flagged elsewhere in this report.
+One nuance: the gap isn't uniform across "before March 2022." January-April 2021 shows a *lower* no-record rate (21-28%) than May 2021-February 2022 (38-68%), so the tracking problem's onset is around May 2021, not the start of the dataset, worth noting if the data team tries to pin down when it began.
+
+Volume also grows over the period, from roughly 700-900/month in early-mid 2021 to 1,500-2,700/month by late 2022, with a visible spike every November in both years, consistent with the Black Friday pattern flagged elsewhere.
 
 </Details>
 
@@ -914,9 +912,11 @@ Before acting on anything above, here's what could complicate it: judgement call
 
   <Details title="Detail">
 
-  Subscriptions purchased before March 2022 show a "no record" rate as high as 68% in some months, vs. a stable ~11-16% from March 2022 onward. This is treated as a logging/rollout gap, not real customer behaviour. Every figure in this report includes the full dataset (34,411 subscriptions). The older cohort is simply more likely to land in the "no record" bucket than it should.
+  Subscriptions purchased before March 2022 show a "no record" rate as high as 68% in some months, vs. a stable ~11-16% after, treated as a logging/rollout gap, not real customer behaviour. Every figure here includes the full dataset (34,411 subscriptions); the older cohort is simply more likely to land in "no record" than it should.
 
-  **Not allocated to "stayed enabled" or "cancelled," for two reasons.** First, the size. 26.0% (8,945 subscriptions) is too large to guess in either direction. Assuming all of it cancelled pushes the cancel rate to 63.4%. Assuming all of it stayed pushes retention to 62.6%. Neither guess is more justified than the other. Second, the sharp, dated drop at March 2022 looks like a fix being introduced, not a gradual decline. That points to a knowable, fixable root cause rather than a permanent gap to estimate around. **The recommendation is to track down and fix the underlying issue, not to model or impute the missing values** (see Recommendation #6).
+  **Not allocated to "stayed enabled" or "cancelled," for two reasons.** First, size: 26.0% (8,945 subscriptions) is too large to guess in either direction. All-cancelled pushes the cancel rate to 63.4%; all-stayed pushes retention to 62.6%, and neither guess is more justified.
+
+  Second, the sharp, dated drop at March 2022 looks like a fix being introduced, not a gradual decline, pointing to a knowable, fixable root cause rather than a permanent gap to estimate around. **The recommendation is to track down and fix the issue, not model or impute the missing values** (see Recommendation #6).
 
   </Details>
 
@@ -924,13 +924,15 @@ Before acting on anything above, here's what could complicate it: judgement call
 
   <Details title="The two live theories, and what's been ruled out">
 
-  There is no enable *or* disable event logged for this group. Not "touched but unexplained." Nothing at all. The "auto-renew is usually on by default" policy would settle this only if these subscriptions started on, and "usually" leaves room for exceptions.
+  There is no enable *or* disable event logged for this group: not "touched but unexplained," nothing at all. The "auto-renew is usually on by default" policy would settle this only if these subscriptions started on, and "usually" leaves room for exceptions.
 
   **Ruled out: the checkout-checkbox theory.** A customer declining an auto-renew checkbox at checkout can't explain it. Checkout has no such option in the flow, confirmed with the product team.
 
   **Two live theories remain.** (1) Auto-renew was switched on and off within the same session. The data stores dates, not timestamps, so anything that reverses within one day leaves no trace. (2) This segment genuinely never had auto-renew touched, a real exception to the default-on policy.
 
-  **Two direct tests were run against theory (1).** First, same-day on/off events do get logged. 333 windows in the data have enable and disable on the same calendar day, so "too fast to log" can't be a blanket explanation. It proves nothing about sub-day speed, though. Second, the no-record group isn't disproportionately free or payment-less, which rules out a simple product-exemption story. Both tests weaken theory (1) without eliminating it. The group stays its own neutral category until the data owner can answer the question.
+  **Two direct tests were run against theory (1).** First, same-day on/off events do get logged: 333 windows have enable and disable on the same calendar day, so "too fast to log" can't be a blanket explanation, though it proves nothing about sub-day speed.
+
+  Second, the no-record group isn't disproportionately free or payment-less, ruling out a simple product-exemption story. Both tests weaken theory (1) without eliminating it, so the group stays its own neutral category until the data owner can answer the question.
 
   </Details>
 
@@ -946,9 +948,11 @@ Three distinct issues surfaced during analysis. One (below, "20 Records Excluded
 
   <Details title="Why this is safe to keep">
 
-  Auto-renew turned on some time after signup for these 2,239 subscriptions (651 free, 1,588 paid). The group skews towards free or no-payment signups. Its zero-billing rate is 29.1% vs. 13.1% for on-time activations, and 21.4% have no payment gateway on file vs. 11.6%. That's only a partial explanation, though. 70.9% still paid something.
+  Auto-renew turned on some time after signup for these 2,239 subscriptions (651 free, 1,588 paid), skewing towards free or no-payment signups: zero-billing rate is 29.1% vs. 13.1% for on-time activations, and 21.4% have no payment gateway on file vs. 11.6%. That's only a partial explanation, though, since 70.9% still paid something.
 
-  They're safe to keep because classification depends on `ar_valid_to`, not `ar_valid_from`, and that date is normal for all 2,239. For 63.3% it matches `ended_at` exactly, meaning they stayed enabled after the late start. The rest disabled again before term end. When activation happened doesn't affect whether the outcome is read correctly. The 20 excluded records below are different. There, the corrupted date is the one classification actually depends on.
+  They're safe to keep because classification depends on `ar_valid_to`, not `ar_valid_from`, and that date is normal for all 2,239. For 63.3% it matches `ended_at` exactly (stayed enabled after the late start); the rest disabled again before term end.
+
+  When activation happened doesn't affect whether the outcome is read correctly, unlike the 20 excluded records below, where the corrupted date is exactly what classification depends on.
 
   </Details>
 
@@ -968,7 +972,9 @@ Two distinct bugs, both resulting in a subscription's classification being untru
 
 <Details title="Detail on both groups">
 
-**Group 1 (17 subscriptions, 18 raw rows):** `ar_valid_from` is dated *after* `ar_valid_to`, which is impossible. Several share identical dates across unrelated subscriptions. Four different ones all show `2023-03-15`, which points to a batch job stamping its own run date into old, closed records. (18 rows collapse to 17 subscriptions because one had two broken rows. Only its most recent survives the one-row-per-subscription step used throughout this analysis.) For all of them `ar_valid_to` still equals `ended_at`, so "stayed enabled" would have been the right call anyway. But a row with a provably impossible date order doesn't get trusted here.
+**Group 1 (17 subscriptions, 18 raw rows):** `ar_valid_from` is dated *after* `ar_valid_to`, which is impossible. Several share identical dates across unrelated subscriptions; four different ones all show `2023-03-15`, pointing to a batch job stamping its own run date into old, closed records. (18 rows collapse to 17 subscriptions, since one had two broken rows and only its most recent survives the one-row-per-subscription step.)
+
+`ar_valid_to` still equals `ended_at` for all of them, so "stayed enabled" would have been the right call anyway, but a row with a provably impossible date order doesn't get trusted here.
 
 **Group 2 (3 subscriptions):** the whole logged auto-renew window predates the subscription's own start date. This is worse than Group 1, because the corrupted field (`ar_valid_to`) is exactly the one classification depends on. All 3 cost exactly €2.4456 across 3 different payment gateways. An identical price suggests one shared root cause, not three separate customer actions.
 
@@ -1012,7 +1018,7 @@ Excluding these 20 records (0.058% of 34,411) doesn't change any headline percen
 
 # Conclusions
 
-**When do users enable or disable auto-renew, and what can the product team do to improve the auto-renew rate?** Concisely, what the data shows:
+**When do users enable or disable auto-renew, and what can the product team do to improve the auto-renew rate?** What the data shows:
 
 1. **The problem is retention, not activation.** Most subscriptions do turn auto-renew on (26.0% have no activation on record, and part of that is a tracking gap). 37.4% actively cancel *after* activating, the bigger, more fixable group.
 
@@ -1020,7 +1026,7 @@ Excluding these 20 records (0.058% of 34,411) doesn't change any headline percen
 
    <Details title="Detail">
 
-   53.3% of annual cancellations happen within 30 days of renewal, and 69.8% within the final 3 months. Annual plans cancel at 2.79x the rate of monthly plans despite activating just as reliably. The renewal charge is the strongest candidate trigger. Timing fits, but the exact mechanism (reminder vs. price jump vs. term-end salience) isn't isolated.
+   53.3% of annual cancellations happen within 30 days of renewal, and 69.8% within the final 3 months. Annual plans cancel at 2.79x the rate of monthly despite activating just as reliably, making the renewal charge the strongest candidate trigger. Timing fits, but the exact mechanism (reminder vs. price jump vs. term-end salience) isn't isolated.
 
    </Details>
 
@@ -1057,8 +1063,8 @@ Excluding these 20 records (0.058% of 34,411) doesn't change any headline percen
 
    <Details title="The four tactics, the theory behind them, and the evidence">
 
-   - **"Decoupled" billing:** charge monthly amounts, but frame it as "your annual plan, billed monthly." This keeps the annual discount and commitment psychology without the customer ever seeing one large number, basically the gym/insurance model.
-   - **A value recap, not just a reminder.** A bare "your card will be charged €X on [date]" notice may itself be part of the trigger, not just a warning about it. Pair it with a personalised "here's what you got this year" (usage stats, milestones, savings vs. monthly pricing) so the renewal notification arrives with justification attached, not just a bill.
+   - **"Decoupled" billing:** charge monthly amounts, framed as "your annual plan, billed monthly," keeping the annual discount and commitment psychology without the customer ever seeing one large number, basically the gym/insurance model.
+   - **A value recap, not just a reminder.** A bare "your card will be charged €X on [date]" notice may itself be part of the trigger. Pair it with a personalised "here's what you got this year" (usage stats, milestones, savings vs. monthly pricing) so the notification arrives with justification attached, not just a bill.
    - **Time it 45-60 days out**, before the 30-day cancellation cluster starts, so it reframes the decision before the sticker-shock reflex kicks in, rather than triggering it.
    - **Offer a pause, not just cancel-or-keep.** A middle option may capture customers who'd cancel outright when the only choice is binary.
 
@@ -1066,9 +1072,13 @@ Excluding these 20 records (0.058% of 34,411) doesn't change any headline percen
 
    **The theory:** a monthly plan spreads cost into 12 small charges; an annual plan is one large lump sum, a year after the customer last thought about it. Behaviourally, a single large, half-forgotten charge is a much sharper trigger to cancel than the same total spread thin.
 
-   **What supports it, beyond the 2.79x rate gap:** cancellation timing clusters tightly around the renewal date rather than spreading evenly across the year. 53.3% of annual cancellations happen within 30 days of renewal, and 69.8% happen in the final 3 months of the term. The cancel event itself happens *before* the term expires, not after, which is consistent with customers reacting to a renewal-reminder notification and cancelling pre-emptively rather than getting charged first and complaining afterward. Annual plans also cancel at 2.79x the rate of monthly despite activating just as reliably at purchase, so it isn't that annual buyers are lower-quality customers from the start. Something specific to the renewal moment is driving it.
+   **What supports it, beyond the 2.79x rate gap:** cancellation timing clusters tightly around the renewal date rather than spreading evenly across the year. 53.3% of annual cancellations happen within 30 days of renewal, 69.8% in the final 3 months.
 
-   **Important caveat:** this data has no field confirming reminder emails exist, when they're sent, or what they say. "Customers react to a renewal reminder" is itself an assumption, not something confirmed here. It's possible the reminder is partly *manufacturing* the 30-day cancellation spike rather than just revealing pre-existing intent. Before rolling any of the four tactics above out broadly, A/B test whether the current reminder (if one exists) helps or hurts retention, and test the value-recap version against a no-recap control. Don't assume the mechanism, measure it.
+   The cancel event happens *before* the term expires, not after, consistent with customers reacting to a renewal-reminder and cancelling pre-emptively rather than getting charged first and complaining. Annual plans also cancel at 2.79x the rate of monthly despite activating just as reliably at purchase, so it isn't that annual buyers are lower-quality from the start; something specific to the renewal moment drives it.
+
+   **Important caveat:** this data has no field confirming reminder emails exist, when they're sent, or what they say. "Customers react to a renewal reminder" is itself an unconfirmed assumption; the reminder could partly *manufacture* the 30-day spike rather than just reveal pre-existing intent.
+
+   Before rolling out any of the four tactics broadly, A/B test whether the current reminder helps or hurts retention, and test the value-recap version against a no-recap control. Don't assume the mechanism, measure it.
 
    </Details>
 
@@ -1086,7 +1096,7 @@ Excluding these 20 records (0.058% of 34,411) doesn't change any headline percen
 
    <Details title="Why">
 
-   We don't know the cause. No field in this data explains it. One assumption worth testing is a platform constraint, since crypto generally can't be stored for automatic re-billing. But that's a guess, not a finding. Ask whoever owns the payment integration directly before treating it as settled and excluding crypto from auto-renew health metrics on that basis.
+   We don't know the cause; no field in this data explains it. One assumption worth testing is a platform constraint, since crypto generally can't be stored for automatic re-billing, but that's a guess, not a finding. Ask whoever owns the payment integration before treating it as settled and excluding crypto from auto-renew health metrics on that basis.
 
    </Details>
 
@@ -1094,7 +1104,9 @@ Excluding these 20 records (0.058% of 34,411) doesn't change any headline percen
 
    <Details title="Why">
 
-   November is the largest signup month and one of the worst-retaining. €6,076 in cancelled 12-month subscriptions came from the November 2022 cohort alone (€8,395 across all November signups, all years). This report has no promotional or campaign data. The Black Friday link is an assumption based on timing alone, meaning the November volume spike plus calendar proximity, not a confirmed cause. Confirm it with whoever ran marketing that year, and check that the pattern repeats in future years, before treating it as permanent.
+   November is the largest signup month and one of the worst-retaining: €6,076 in cancelled 12-month subscriptions came from the November 2022 cohort alone (€8,395 across all November signups, all years).
+
+   This report has no promotional or campaign data, so the Black Friday link is an assumption based on timing alone (volume spike plus calendar proximity), not a confirmed cause. Confirm it with whoever ran marketing that year, and check the pattern repeats in future years, before treating it as permanent.
 
    </Details>
 
@@ -1102,11 +1114,17 @@ Excluding these 20 records (0.058% of 34,411) doesn't change any headline percen
 
    <Details title="The three checks, in detail">
 
-   **1. Timing: supports the theory in 2022, weak in 2021.** Black Friday (Nov 25) and Cyber Monday (Nov 28) 2022 were the two highest-volume signup days in the late-November window. They hit 126 and 122, against 69-118 on surrounding days. A real, specific spike. The same two days in 2021 (70 and 74, against 36-76) barely stand out. That's more a gradual late-month ramp. The year-over-year difference is itself a question marketing can answer. Did Black Friday spend or discount depth change between 2021 and 2022? If yes, the causal story gets stronger, since spike size tracks promo intensity. If no, it's a point against.
+   **1. Timing: supports the theory in 2022, weak in 2021.** Black Friday (Nov 25) and Cyber Monday (Nov 28) 2022 were the two highest-volume signup days in the late-November window, hitting 126 and 122 against 69-118 on surrounding days, a real, specific spike. The same two days in 2021 (70 and 74, against 36-76) barely stand out, more a gradual late-month ramp.
 
-   **2. Price: no discount signature, once product mix is controlled for.** Within the same product group, November prices are flat against other months. Domain is marginally cheaper (€0.71 vs. €0.80 avg) and hosting marginally pricier on 12-month plans (€7.41 vs. €7.00). We looked for a discount fingerprint and didn't find one. That argues against a simple promo-discount-churn mechanism. One caveat. A flat-rate promo that wasn't applied universally wouldn't necessarily lower the average, so a promotion isn't fully ruled out. It's just not supported.
+   The year-over-year difference is itself a question marketing can answer: did Black Friday spend or discount depth change between 2021 and 2022? If yes, the causal story gets stronger, since spike size tracks promo intensity; if no, it's a point against.
 
-   **3. Mechanism: can't be tested with this data.** The decisive test is whether churn concentrated among accounts whose price jumped at renewal, i.e. a discount expiring. That needs each customer's first-year price linked to their renewal-year price. With no customer ID, the two terms can't be joined at all. This is the one test that would separate promo-driven from channel-driven from seasonal-intent churn. It's worth a concrete data request. Even a partial identifier (email hash, payment token) for a sample of November customers would do. Get that before finalising a retention plan built on an unconfirmed mechanism.
+   **2. Price: no discount signature, once product mix is controlled for.** Within the same product group, November prices are flat against other months: domain marginally cheaper (€0.71 vs. €0.80 avg), hosting marginally pricier on 12-month plans (€7.41 vs. €7.00). We looked for a discount fingerprint and didn't find one, arguing against a simple promo-discount-churn mechanism.
+
+   One caveat: a flat-rate promo that wasn't applied universally wouldn't necessarily lower the average, so a promotion isn't fully ruled out, just not supported.
+
+   **3. Mechanism: can't be tested with this data.** The decisive test is whether churn concentrated among accounts whose price jumped at renewal (a discount expiring), which needs each customer's first-year price linked to their renewal-year price. With no customer ID, the two terms can't be joined at all.
+
+   This is the one test that would separate promo-driven from channel-driven from seasonal-intent churn, worth a concrete data request: even a partial identifier (email hash, payment token) for a sample of November customers would do. Get that before finalising a retention plan built on an unconfirmed mechanism.
 
    </Details>
 
@@ -1114,11 +1132,13 @@ Excluding these 20 records (0.058% of 34,411) doesn't change any headline percen
 
    <Details title="Why">
 
-   Does a blank `is_auto_renew` mean auto-renew was enabled and cancelled within the same session, too fast to log since the data only has dates? Or was it never touched at all? The checkout-checkbox theory is already ruled out, since no such option exists in the flow. That narrows it to one real question. Could the logging system miss a same-session on/off event? See Assumptions and Limitations in the Appendix.
+   Does a blank `is_auto_renew` mean auto-renew was enabled and cancelled within the same session, too fast to log since the data only has dates? Or was it never touched at all? The checkout-checkbox theory is already ruled out, since no such option exists in the flow, narrowing it to one real question: could the logging system miss a same-session on/off event? See Assumptions and Limitations in the Appendix.
 
-   **Why this looks fixable:** the no-record rate isn't a flat, ongoing problem. It drops sharply and specifically at March 2022, from as high as 68% in some months down to a stable 11-16%. That looks like a fix was already introduced then, whether intentional or not. The root cause should be findable, not something to live with indefinitely.
+   **Why this looks fixable:** the no-record rate isn't a flat, ongoing problem. It drops sharply and specifically at March 2022, from as high as 68% in some months down to a stable 11-16%, looking like a fix was already introduced then, whether intentional or not. The root cause should be findable, not something to live with indefinitely.
 
-   **How this report treated it in the meantime:** it stays its own `no_record` category everywhere. It's never folded into "cancelled" or "stayed enabled," and never allocated proportionally either. The segment is too large to guess. All-cancelled pushes the cancel rate to 63.4%. All-stayed pushes retention to 62.6%. Either choice would silently bake an unconfirmed guess into every headline number. The fix is to find and resolve the logging issue, not to estimate around it.
+   **How this report treated it in the meantime:** it stays its own `no_record` category everywhere, never folded into "cancelled" or "stayed enabled," and never allocated proportionally either.
+
+   The segment is too large to guess: all-cancelled pushes the cancel rate to 63.4%, all-stayed pushes retention to 62.6%, and either choice would silently bake an unconfirmed guess into every headline number. The fix is to find and resolve the logging issue, not estimate around it.
 
    </Details>
 

@@ -8,7 +8,7 @@ SELECT
   END AS bucket,
   min(days_before_expiry_disabled) AS sort_key,
   count(*) AS n,
-  round(100.0 * count(*) / sum(count(*)) OVER (), 1) AS pct
+  round(100.0 * count(*) / sum(count(*)) OVER (), 1) / 100.0 AS pct
 FROM ${subscription_status}
 WHERE final_status = 'disabled_before_expiry' AND is_clean_window AND period_months = 12
 GROUP BY 1
