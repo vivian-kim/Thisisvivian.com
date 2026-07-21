@@ -1091,6 +1091,8 @@ Excluding these 20 records (0.058% of 34,411) doesn't change any headline percen
 
 2. **Make the annual renewal charge less jarring.** Four tactics, ordered by how directly they address the trigger:
 
+   <Details title="The four tactics, the theory behind them, and the evidence">
+
    - **"Decoupled" billing:** charge monthly amounts, but frame it as "your annual plan, billed monthly." This keeps the annual discount and commitment psychology without the customer ever seeing one large number, basically the gym/insurance model.
    - **A value recap, not just a reminder.** A bare "your card will be charged €X on [date]" notice may itself be part of the trigger, not just a warning about it. Pair it with a personalised "here's what you got this year" (usage stats, milestones, savings vs. monthly pricing) so the renewal notification arrives with justification attached, not just a bill.
    - **Time it 45-60 days out**, before the 30-day cancellation cluster starts, so it reframes the decision before the sticker-shock reflex kicks in, rather than triggering it.
@@ -1103,6 +1105,8 @@ Excluding these 20 records (0.058% of 34,411) doesn't change any headline percen
    **What supports it, beyond the 2.79x rate gap:** cancellation timing clusters tightly around the renewal date rather than spreading evenly across the year. 53.3% of annual cancellations happen within 30 days of renewal, and 69.8% happen in the final 3 months of the term. The cancel event itself happens *before* the term expires, not after, which is consistent with customers reacting to a renewal-reminder notification and cancelling pre-emptively rather than getting charged first and complaining afterward. Annual plans also cancel at 2.79x the rate of monthly despite activating just as reliably at purchase, so it isn't that annual buyers are lower-quality customers from the start. Something specific to the renewal moment is driving it.
 
    **Important caveat:** this data has no field confirming reminder emails exist, when they're sent, or what they say. "Customers react to a renewal reminder" is itself an assumption, not something confirmed here. It's possible the reminder is partly *manufacturing* the 30-day cancellation spike rather than just revealing pre-existing intent. Before rolling any of the four tactics above out broadly, A/B test whether the current reminder (if one exists) helps or hurts retention, and test the value-recap version against a no-recap control. Don't assume the mechanism, measure it.
+
+   </Details>
 
    </Details>
 
